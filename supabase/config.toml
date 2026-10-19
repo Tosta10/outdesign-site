@@ -1,0 +1,4 @@
+project_id = "outdesign-site"
+
+[functions.studio-api]
+verify_jwt = false

@@ -1,0 +1,26 @@
+{
+  "viewports": [
+    1440,
+    1024,
+    768,
+    390,
+    320
+  ],
+  "publicAccessibility": [],
+  "editorAccessibility": [],
+  "runtimeErrors": [],
+  "verified": [
+    "first-run two-password setup",
+    "draft isolation",
+    "autosave",
+    "theme switching",
+    "project addition and ordering",
+    "image/audio/file uploads",
+    "mobile editor",
+    "publish",
+    "history restore",
+    "logout",
+    "wrong-password denial",
+    "no browser-stored credentials"
+  ]
+}

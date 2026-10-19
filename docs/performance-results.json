@@ -1,0 +1,52 @@
+{
+  "source": "Local production static build; Lighthouse simulated mobile, not field data",
+  "scores": {
+    "performance": 100,
+    "accessibility": 100,
+    "best-practices": 100,
+    "seo": 100
+  },
+  "lcpMs": 1430,
+  "cls": 0,
+  "totalBlockingTimeMs": 0,
+  "inp": "Requires real-user field measurement after deployment",
+  "initialJavaScriptGzipBytes": 1979,
+  "assets": [
+    {
+      "file": "bootstrap.B9O28zYJ.css",
+      "bytes": 15912,
+      "gzipBytes": 4195,
+      "initiallyLoaded": false
+    },
+    {
+      "file": "bootstrap.DagiMzjL.js",
+      "bytes": 130374,
+      "gzipBytes": 37820,
+      "initiallyLoaded": false
+    },
+    {
+      "file": "client.BhmAvV_J.js",
+      "bytes": 1844,
+      "gzipBytes": 933,
+      "initiallyLoaded": false
+    },
+    {
+      "file": "client.Cen-9jKQ.js",
+      "bytes": 218992,
+      "gzipBytes": 67540,
+      "initiallyLoaded": false
+    },
+    {
+      "file": "index.astro_astro_type_script_index_0_lang.BYOnE4Ck.js",
+      "bytes": 4273,
+      "gzipBytes": 1979,
+      "initiallyLoaded": true
+    },
+    {
+      "file": "index.BUWSOI-h.css",
+      "bytes": 19135,
+      "gzipBytes": 5319,
+      "initiallyLoaded": false
+    }
+  ]
+}

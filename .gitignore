@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.astro/
+.local/
+artifacts/
+.env
+.env.*
+!.env.example
+!**/.env.example
+supabase/.temp/
+*.log
+.DS_Store

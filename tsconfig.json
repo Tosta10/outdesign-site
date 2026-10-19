@@ -1,0 +1,14 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  "include": [
+    ".astro/types.d.ts",
+    "src/**/*",
+    "supabase/functions/_shared/**/*"
+  ],
+  "exclude": ["dist", "node_modules", "supabase/functions/studio-api"],
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  }
+}

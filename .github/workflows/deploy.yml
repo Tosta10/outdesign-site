@@ -1,0 +1,73 @@
+name: Validate and deploy OutDesign
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      content_version:
+        description: Published content version (leave empty for latest)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: outdesign-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm test
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno check --config supabase/functions/studio-api/deno.json supabase/functions/studio-api/index.ts
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+        env:
+          CI: true
+      - name: Build published content
+        run: pnpm build
+        env:
+          PUBLIC_API_URL: ${{ vars.PUBLIC_API_URL }}
+          SITE_URL: ${{ vars.SITE_URL || format('https://{0}.github.io', github.repository_owner) }}
+          BASE_PATH: ${{ vars.BASE_PATH || format('/{0}/', github.event.repository.name) }}
+          CONTENT_REQUIRED: ${{ vars.PUBLIC_API_URL != '' && 'true' || 'false' }}
+          CONTENT_VERSION: ${{ inputs.content_version }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - name: Save verification artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-verification
+          path: artifacts
+          if-no-files-found: ignore
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment
