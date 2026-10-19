@@ -88,6 +88,7 @@ export function ContentSection({
                 />
                 <button
                   className="work-image-button"
+                  data-optical-card
                   data-open-dialog={`project-${p.id}`}
                   aria-label={`查看作品：${p.title}`}
                 >
@@ -337,7 +338,6 @@ export function ContentSection({
           <CanvasHandle id="section:contact" label="聯絡" editing={editing} />
           <div className="contact-top">
             <p className="eyebrow section-number">04 / LET'S MAKE SOMETHING</p>
-            <span className="contact-spark">✳</span>
           </div>
           <div className="contact-main">
             <h2 className="preserve-lines">{c.contact.headline}</h2>

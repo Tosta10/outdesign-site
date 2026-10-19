@@ -94,6 +94,29 @@ try {
     false,
     "Editor must not load for visitors",
   );
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  const optical = await page.locator(".mission-card").boundingBox();
+  await page.mouse.move(
+    optical.x + optical.width * 0.25,
+    optical.y + optical.height * 0.25,
+  );
+  await page.waitForFunction(() =>
+    document.querySelector(".mission-card").style.transform.includes("rotateX"),
+  );
+  await page.mouse.move(0, 0);
+  await page.waitForFunction(
+    () => document.querySelector(".mission-card").style.transform === "",
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.mouse.move(
+    optical.x + optical.width * 0.25,
+    optical.y + optical.height * 0.25,
+  );
+  assert.equal(
+    await page.locator(".mission-card").evaluate((el) => el.style.transform),
+    "",
+  );
+  await page.mouse.move(0, 0);
   await page.screenshot({ path: "artifacts/home-desktop.png", fullPage: true });
   const viewports = [];
   for (const width of [1440, 1024, 768, 390, 320]) {
@@ -113,6 +136,14 @@ try {
       });
   }
   await page.setViewportSize({ width: 1440, height: 1080 });
+  assert.equal(
+    await page
+      .locator(".work-grid,.notes-list,#about,#contact,#attachments")
+      .count(),
+    0,
+    "Homepage only contains curated navigation",
+  );
+  await page.goto(`${origin}/work/`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "設計", exact: true }).click();
   assert.equal(await page.locator(".work-card:visible").count(), 1);
   await page.getByRole("button", { name: /^全部/ }).click();
@@ -122,11 +153,13 @@ try {
     .click();
   assert.equal(await page.getByRole("dialog").isVisible(), true);
   await page.keyboard.press("Escape");
+  await page.goto(`${origin}/journal/`, { waitUntil: "networkidle" });
   await page.locator(".note-item summary").first().click();
   assert.equal(
     await page.locator(".note-item").first().getAttribute("open"),
     "",
   );
+  await page.goto(`${origin}/about/`, { waitUntil: "networkidle" });
   await page.locator("[data-audio-toggle]").click();
   await page.waitForFunction(
     () => document.querySelector("audio").currentTime > 0,
@@ -145,6 +178,7 @@ try {
     ["work", "作品"],
     ["journal", "筆記"],
     ["about", "關於"],
+    ["resources", "資源"],
   ]) {
     await page.goto(`${origin}/${route}/`, { waitUntil: "networkidle" });
     assert.equal(await page.title(), `${title} — OutDesign`);
@@ -189,8 +223,9 @@ try {
   await page.getByRole("tab", { name: "風格" }).click();
   await page.locator(".theme-option.quiet").click();
   await page.locator(".editor-canvas .theme-quiet").waitFor();
+  await page.getByLabel("預覽頁面", { exact: true }).selectOption("about");
   await page
-    .getByRole("button", { name: "拖曳排序：作品", exact: true })
+    .getByRole("button", { name: "拖曳排序：關於", exact: true })
     .press("ArrowDown");
   await page.getByText("所有修改已儲存", { exact: true }).waitFor();
   assert.equal(
@@ -200,18 +235,18 @@ try {
   );
   assert.equal(
     await page
-      .locator(".editor-canvas main>section")
+      .locator(".editor-canvas .page-content>section")
       .first()
       .getAttribute("id"),
-    "notes",
+    "contact",
   );
   await page.getByRole("button", { name: "復原上一步", exact: true }).click();
   assert.equal(
     await page
-      .locator(".editor-canvas main>section")
+      .locator(".editor-canvas .page-content>section")
       .first()
       .getAttribute("id"),
-    "work",
+    "about",
   );
   await page.screenshot({ path: "artifacts/editor-desktop.png" });
   const editorAxe = await new AxeBuilder({ page })
@@ -224,6 +259,55 @@ try {
   const severeEditor = editorAxe.violations.filter((v) =>
     ["critical", "serious"].includes(v.impact),
   );
+  await page.getByRole("tab", { name: "互動" }).click();
+  await page.getByLabel("卡片互動", { exact: true }).selectOption("lift");
+  await page.getByLabel("頁面切換", { exact: true }).selectOption("slide");
+  await page.getByRole("button", { name: "自定義：檢視屬性與實作" }).click();
+  assert.ok(
+    (await page.locator(".source-preview").nth(1).textContent()).includes(
+      "requestAnimationFrame",
+    ),
+  );
+  await page.getByRole("tab", { name: "代碼", exact: true }).click();
+  const code = page.getByLabel("網站程式碼", { exact: true });
+  const baseline = await code.inputValue();
+  await code.fill('{"bad":true}');
+  await page.getByRole("button", { name: "驗證並套用", exact: true }).click();
+  assert.equal(await code.inputValue(), '{"bad":true}');
+  assert.ok(
+    (await page.locator(".code-message").textContent()).includes(
+      "schemaVersion",
+    ),
+  );
+  const bulk = JSON.parse(baseline);
+  bulk.about.title = "測試批次編輯";
+  await code.fill(JSON.stringify(bulk, null, 2));
+  await page.getByRole("button", { name: "驗證並套用", exact: true }).click();
+  await page
+    .getByText("已套用至草稿並預覽。可用頂部復原；發布後才對訪客生效。", {
+      exact: true,
+    })
+    .waitFor();
+  assert.equal(
+    await page.locator(".editor-canvas #about h2").textContent(),
+    "測試批次編輯",
+  );
+  await page.getByRole("button", { name: "復原上一步", exact: true }).click();
+  assert.notEqual(
+    await page.locator(".editor-canvas #about h2").textContent(),
+    "測試批次編輯",
+  );
+  await page.getByRole("button", { name: "載入目前草稿", exact: true }).click();
+  await page.getByLabel("編輯檔案", { exact: true }).selectOption("css");
+  await code.fill((await code.inputValue()).replace("1280px", "1200px"));
+  await page.getByRole("button", { name: "驗證並套用", exact: true }).click();
+  assert.equal(
+    await page
+      .locator(".editor-canvas .site")
+      .evaluate((el) => el.style.getPropertyValue("--page-width")),
+    "1200px",
+  );
+  await page.getByRole("button", { name: "復原上一步", exact: true }).click();
   await page.getByRole("tab", { name: "內容" }).click();
   await page.getByRole("button", { name: "新增作品", exact: true }).click();
   await page.getByLabel("作品名稱", { exact: true }).fill("OutDesign Lab");
@@ -313,8 +397,9 @@ try {
     .click({ position: { x: 60, y: 120 } });
   await page.getByLabel("標題第一行", { exact: true }).waitFor();
   await page.setViewportSize({ width: 1440, height: 1080 });
+  await page.getByLabel("預覽頁面", { exact: true }).selectOption("about");
   await page
-    .getByRole("button", { name: "拖曳排序：作品", exact: true })
+    .getByRole("button", { name: "拖曳排序：關於", exact: true })
     .press("ArrowDown");
   await page.getByRole("button", { name: "發布", exact: true }).click();
   await page.getByRole("button", { name: "確認發布", exact: true }).click();
@@ -325,10 +410,14 @@ try {
   assert.equal(after.content.hero.line1, "讓創意，有方向。");
   assert.equal(after.content.settings.theme, "quiet");
   assert.equal(after.content.projects.length, 4);
+  assert.equal(after.content.interactions.card, "lift");
+  assert.equal(after.content.interactions.transition, "slide");
   assert.equal(after.content.attachments.length, 1);
   assert.equal(
-    after.content.layout.sections[0],
-    "notes",
+    after.content.layout.sections.filter((key) =>
+      ["about", "contact"].includes(key),
+    )[0],
+    "contact",
     "Canvas order persists through publication",
   );
   const imageAsset = after.content.projects
@@ -380,10 +469,13 @@ try {
       "mobile editor",
       "publish",
       "history restore",
-      "four static pages and accessible navigation drawer",
+      "five static pages with separated content and accessible navigation",
       "canvas keyboard section reordering and undo",
       "long-press pointer project reordering",
       "editor page switching",
+      "pointer tilt settling and reduced-motion fallback",
+      "interaction configuration and source inspection",
+      "invalid JSON rejection, bulk edit, typed CSS preview and undo",
       "logout",
       "wrong-password denial",
       "no browser-stored credentials",

@@ -19,6 +19,7 @@ import { Icon } from "../components/Icon";
 import { initViewer } from "../lib/viewer";
 import { ApiError, prepareUpload, StudioApi } from "./api";
 import { Auth } from "./Auth";
+import { CodePanel, InteractionsPanel } from "./advanced";
 import { ContentPanel, ThemePanel } from "./panels";
 
 type PublishResult = {
@@ -97,7 +98,9 @@ function Editor({
 }) {
   const [content, setContent] = useState<SiteContent | null>(null),
     [selection, setSelection] = useState<Selection>("hero"),
-    [tab, setTab] = useState<"content" | "theme" | "media">("content");
+    [tab, setTab] = useState<
+      "content" | "theme" | "media" | "interactions" | "code"
+    >("content");
   const [panelOpen, setPanelOpen] = useState(true),
     [preview, setPreview] = useState(false),
     [error, setError] = useState(""),
@@ -106,6 +109,23 @@ function Editor({
     (document.body.dataset.page as SitePage) || "home",
   );
   const [layersOpen, setLayersOpen] = useState(false);
+  const codeDirty = useRef(false);
+  function discardCode() {
+    if (!codeDirty.current) return true;
+    if (!window.confirm("代碼尚未套用，確定捨棄並離開程式碼工作區？"))
+      return false;
+    codeDirty.current = false;
+    return true;
+  }
+  function changeTab(
+    value: "content" | "theme" | "media" | "interactions" | "code",
+  ) {
+    if (discardCode()) setTab(value);
+  }
+  function closePanel() {
+    if (discardCode()) setPanelOpen(false);
+  }
+
   const [saveState, setSaveState] = useState<
       "saved" | "dirty" | "saving" | "error"
     >("saved"),
@@ -196,8 +216,8 @@ function Editor({
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       if (
-        current.current &&
-        JSON.stringify(current.current) !== saved.current
+        codeDirty.current ||
+        (current.current && JSON.stringify(current.current) !== saved.current)
       ) {
         e.preventDefault();
       }
@@ -259,7 +279,17 @@ function Editor({
       c = current.current;
     const ids =
       kind === "section"
-        ? c.layout?.sections || defaultSections
+        ? (c.layout?.sections || defaultSections).filter((key) =>
+            (
+              ({
+                home: [],
+                work: ["work"],
+                journal: ["notes"],
+                about: ["about", "contact"],
+                resources: ["attachments"],
+              }) as Record<SitePage, string[]>
+            )[page].includes(key),
+          )
         : kind === "project"
           ? c.projects.map((p) => p.id)
           : c.notes.map((n) => n.id);
@@ -314,7 +344,7 @@ function Editor({
       setPage("journal");
     }
     setSelection(`${kind}:${id}`);
-    setTab("content");
+    changeTab("content");
     setPanelOpen(true);
   }
   const saveNow = () => {
@@ -407,12 +437,13 @@ function Editor({
         e.preventDefault();
         saveRef.current().catch(fail);
       }
-      if (e.key === "Escape" && !showPublish) setPanelOpen(false);
+      if (e.key === "Escape" && !showPublish) closePanel();
     };
     window.addEventListener("keydown", keys);
     return () => window.removeEventListener("keydown", keys);
   }, [showPublish]);
   async function exit() {
+    if (!discardCode()) return;
     if (
       current.current &&
       JSON.stringify(current.current) !== saved.current &&
@@ -521,7 +552,7 @@ function Editor({
           label: `${(m.size / 1_000_000).toFixed(1)} MB`,
         });
     });
-    setTab("content");
+    changeTab("content");
     setNotice("素材已套用至草稿。");
   }
   async function removeMedia(m: Media) {
@@ -662,7 +693,10 @@ function Editor({
           <button
             className="editor-small-button panel-toggle"
             aria-expanded={panelOpen}
-            onClick={() => setPanelOpen((p) => !p)}
+            onClick={() => {
+              if (panelOpen) closePanel();
+              else setPanelOpen(true);
+            }}
           >
             <Icon name="menu" size={16} />
             <span>面板</span>
@@ -715,14 +749,24 @@ function Editor({
               </button>
             ))}
           </div>
-          <p className="layer-section-label">首頁區塊</p>
+          <p className="layer-section-label">頁面區塊</p>
           <div className="layer-blocks">
-            {(content.layout?.sections || defaultSections).map(
-              (key, index, list) => (
+            {(content.layout?.sections || defaultSections)
+              .filter((key) =>
+                (
+                  ({
+                    home: [],
+                    work: ["work"],
+                    journal: ["notes"],
+                    about: ["about", "contact"],
+                    resources: ["attachments"],
+                  }) as Record<SitePage, string[]>
+                )[page].includes(key),
+              )
+              .map((key, index, list) => (
                 <div key={key}>
                   <button
                     onClick={() => {
-                      setPage("home");
                       requestAnimationFrame(() => {
                         const node = view.current?.querySelector<HTMLElement>(
                           `[data-layout="section:${key}"]`,
@@ -763,8 +807,7 @@ function Editor({
                     <Icon name="down" size={12} />
                   </button>
                 </div>
-              ),
-            )}
+              ))}
           </div>
           <div className="layers-help">
             <Icon name="edit" size={15} />
@@ -804,7 +847,7 @@ function Editor({
             event.preventDefault();
             event.stopPropagation();
             setSelection(element.dataset.edit as Selection);
-            setTab("content");
+            changeTab("content");
             setPanelOpen(true);
           }
         }}
@@ -847,7 +890,7 @@ function Editor({
           <button
             aria-label="開啟素材工具"
             onClick={() => {
-              setTab("media");
+              changeTab("media");
               setPanelOpen(true);
             }}
           >
@@ -866,12 +909,16 @@ function Editor({
                   ? "視覺風格"
                   : tab === "media"
                     ? "素材資料庫"
-                    : "編輯內容"}
+                    : tab === "interactions"
+                      ? "交互設定"
+                      : tab === "code"
+                        ? "程式碼工作區"
+                        : "編輯內容"}
               </h2>
             </div>
             <button
               className="icon-button"
-              onClick={() => setPanelOpen(false)}
+              onClick={closePanel}
               aria-label="關閉編輯面板"
             >
               <Icon name="close" size={18} />
@@ -883,6 +930,8 @@ function Editor({
                 ["content", "內容"],
                 ["theme", "風格"],
                 ["media", "媒體"],
+                ["interactions", "互動"],
+                ["code", "代碼"],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -891,7 +940,7 @@ function Editor({
                 aria-selected={tab === value}
                 aria-controls={`panel-${value}`}
                 id={`tab-${value}`}
-                onClick={() => setTab(value)}
+                onClick={() => changeTab(value)}
               >
                 {label}
               </button>
@@ -954,13 +1003,40 @@ function Editor({
                 )}
               </div>
             )}
+            {tab === "interactions" && (
+              <InteractionsPanel content={content} update={update} />
+            )}
+            {tab === "code" && (
+              <CodePanel
+                content={content}
+                onDirty={(dirty) => {
+                  codeDirty.current = dirty;
+                }}
+                apply={(next) =>
+                  update((n) => {
+                    Object.keys(n).forEach(
+                      (key) =>
+                        delete (n as unknown as Record<string, unknown>)[key],
+                    );
+                    Object.assign(n, next);
+                  })
+                }
+              />
+            )}
             {tab === "content" && (
               <ContentPanel
                 content={content}
                 selection={selection}
-                setSelection={setSelection}
+                setSelection={(value) => {
+                  setSelection(value);
+                  if (value.startsWith("project:")) setPage("work");
+                  else if (value.startsWith("note:")) setPage("journal");
+                  else if (value === "hero") setPage("home");
+                  else if (["about", "contact", "music"].includes(value))
+                    setPage("about");
+                }}
                 update={update}
-                openMedia={() => setTab("media")}
+                openMedia={() => changeTab("media")}
               />
             )}
             {tab === "theme" && (

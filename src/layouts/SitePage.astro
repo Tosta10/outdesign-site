@@ -2,15 +2,16 @@
 import { SiteRenderer, type SitePage } from '../components/SiteRenderer';
 import { loadPublicContent } from '../lib/content';
 import '../styles/site.css';
+import '../styles/effects.css';
 const { page = 'home' } = Astro.props as {page?: SitePage};
 const { content, version } = await loadPublicContent();
 const base = import.meta.env.BASE_URL;
 const api = (import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? '/api' : '')).replace(/\/$/, '');
 const canonical = new URL(`${base}${page === 'home' ? '' : page + '/'}`, Astro.site || Astro.url);
-const title = page === 'home' ? content.settings.siteTitle : `${{work:'作品',journal:'筆記',about:'關於'}[page]} — ${content.settings.name}`;
+const title = page === 'home' ? content.settings.siteTitle : `${{work:'作品',journal:'筆記',about:'關於',resources:'資源'}[page]} — ${content.settings.name}`;
 ---
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="zh-Hant" data-transition={content.interactions?.transition || "fade"}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />

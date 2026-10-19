@@ -1,4 +1,6 @@
+import { initEffects } from "./effects";
 export function initViewer(root: Document | HTMLElement): () => void {
+  const disposeEffects = initEffects(root);
   const abort = new AbortController();
   const listen = (element: EventTarget, type: string, handler: EventListener) =>
     element.addEventListener(type, handler, { signal: abort.signal });
@@ -107,6 +109,7 @@ export function initViewer(root: Document | HTMLElement): () => void {
     });
   }
   return () => {
+    disposeEffects();
     abort.abort();
     audio?.pause();
     if (menu?.open) menu.close();

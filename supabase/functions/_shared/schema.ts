@@ -56,6 +56,44 @@ export const attachmentSchema = z
     label: text(30),
   })
   .strict();
+export const interactionSchema = z
+  .object({
+    card: z.enum(["none", "lift", "tilt"]),
+    tilt: z.number().min(1).max(6),
+    damping: z.number().min(0.06).max(0.3),
+    transition: z.enum(["none", "fade", "slide"]),
+    ripple: z.boolean(),
+  })
+  .strict();
+export const defaultInteractions: z.infer<typeof interactionSchema> = {
+  card: "tilt",
+  tilt: 3,
+  damping: 0.12,
+  transition: "fade",
+  ripple: true,
+};
+export const designSchema = z
+  .object({
+    background: z.string().regex(/^#[0-9a-f]{6}$/i),
+    surface: z.string().regex(/^#[0-9a-f]{6}$/i),
+    raised: z.string().regex(/^#[0-9a-f]{6}$/i),
+    text: z.string().regex(/^#[0-9a-f]{6}$/i),
+    muted: z.string().regex(/^#[0-9a-f]{6}$/i),
+    accent: z.string().regex(/^#[0-9a-f]{6}$/i),
+    width: z.number().int().min(960).max(1600),
+    radius: z.number().int().min(0).max(32),
+  })
+  .strict();
+export const defaultDesign: z.infer<typeof designSchema> = {
+  background: "#0a0a0a",
+  surface: "#141414",
+  raised: "#1c1c1c",
+  text: "#efefec",
+  muted: "#a0a09f",
+  accent: "#d3cde2",
+  width: 1280,
+  radius: 12,
+};
 export const contentSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -100,6 +138,8 @@ export const contentSchema = z
       .object({ title: text(100), artist: text(100), url: mediaUrl })
       .strict(),
     attachments: z.array(attachmentSchema).max(20),
+    interactions: interactionSchema.optional(),
+    design: designSchema.optional(),
     layout: z
       .object({
         sections: z
