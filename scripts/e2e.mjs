@@ -253,7 +253,12 @@ try {
   assert.equal((await fetch(api.url + "/api/media/" + imageAsset)).status, 200);
   await page.getByRole("button", { name: "發布歷史" }).click();
   await page.getByRole("button", { name: "載入草稿", exact: true }).click();
-  await page.getByRole("button", { name: "登出並關閉編輯器" }).click();
+  // Publishing locally reloads the public page after the asynchronous logout.
+  // Wait for that navigation before interacting with the next login dialog.
+  await Promise.all([
+    page.waitForEvent("load"),
+    page.getByRole("button", { name: "登出並關閉編輯器" }).click(),
+  ]);
   await page.waitForLoadState("networkidle");
   await page.getByRole("button", { name: "作者模式" }).click();
   await page.getByRole("heading", { name: "回到你的創作空間" }).waitFor();
