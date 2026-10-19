@@ -19,6 +19,10 @@
     "mobile editor",
     "publish",
     "history restore",
+    "four static pages and accessible navigation drawer",
+    "canvas keyboard section reordering and undo",
+    "long-press pointer project reordering",
+    "editor page switching",
     "logout",
     "wrong-password denial",
     "no browser-stored credentials"

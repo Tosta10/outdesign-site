@@ -6,14 +6,14 @@
 
 | 項目 | 結果 |
 | --- | --- |
-| Performance | 100 |
+| Performance | 99 |
 | Accessibility | 100 |
 | Best Practices | 100 |
 | SEO | 100 |
-| LCP | 約 1.43 秒 |
+| LCP | 約 1.88 秒 |
 | CLS | 0 |
 | Total Blocking Time | 0 ms |
-| 訪客初始 JavaScript | 約 1.98 KB gzip 計算值 |
+| 訪客初始 JavaScript | 約 2.10 KB gzip 計算值 |
 
 這是本機實驗室結果，包含原創示範素材；不代表所有裝置、網路、後續上傳素材與正式網域均會取得相同成績。gzip 數值由產物計算，實際傳輸壓縮依託管服務而定。INP 必須在上線後用真實互動與流量評估，不能用 TBT 代替。
 
@@ -31,7 +31,7 @@ Linux／CI 請先 `pnpm exec playwright install --with-deps chromium`。Windows 
 - 公開內容在建置時輸出為完整 HTML。作者編輯器、React runtime、Zod 與編輯器 CSS 在點擊作者入口後才載入。
 - 訪客初始互動只處理分類、原生 dialog、音樂與選單，無持續執行的捲動動畫或全頁 Canvas。
 - 封面圖片指定尺寸、固定比例、lazy loading、非同步解碼；主視覺優先載入。
-- 預設 SVG 為原創、小體積向量；音訊 `preload="none"`，由訪客主動播放。
+- 月面背景為 73 KB WebP，輔以原創小體積 SVG；手機停用背景模糊與透視。音訊 `preload="none"`，由訪客主動播放。
 - 大型上傳圖片在瀏覽器以長邊 1800px、WebP 品質 0.86 最佳化（GIF／AVIF 保留原檔）。
 - 編輯器僅預先取回目前草稿引用的素材，不一次下載完整素材庫；選用其他私人素材時才讀取。
 - 正式 Storage 透過短效、僅留在伺服器的簽名網址串流檔案，支援 Range，避免將整段大型音訊緩衝於 Edge 記憶體。
@@ -41,15 +41,15 @@ Linux／CI 請先 `pnpm exec playwright install --with-deps chromium`。Windows 
 
 ## 功能與安全驗證
 
-- 15 項 Node／PostgreSQL 測試通過：兩組密碼、錯誤登入、工作階段、登出、輪替、草稿隔離、版本衝突、素材保護、限流、URL／schema 驗證，以及正式 migration 的 RLS／原子發布程序。
+- 16 項 Node／PostgreSQL 測試通過：兩組密碼、錯誤登入、工作階段、登出、輪替、草稿隔離、版本衝突、素材保護、限流、URL／schema 驗證，以及正式 migration 的 RLS／原子發布程序。
 - PostgreSQL 使用 PGlite 執行真實 migration SQL，重建 Supabase roles 與 bucket metadata 以驗證授權；這不取代正式 Supabase 服務整合測試。
 - `astro check` 與正式 Edge Function 的 `deno check` 通過。
 - Playwright 測試 320／390／768／1024／1440px，未發現水平溢出。
-- 瀏覽器涵蓋分類、詳情、筆記、音訊、首次密碼設定、登入、草稿自動儲存、主題、排序、多媒體、手機編輯器、發布、歷史還原與登出。
+- 瀏覽器涵蓋四個頁面、右側抽屜、分類、詳情、音訊、雙密碼、草稿、主題、長按拖曳、方向鍵排序與復原、多媒體、手機編輯器、發布後順序持久化及歷史還原。
 - Axe WCAG A／AA 自動檢查公開頁與編輯器，無嚴重或重大問題；自動檢查不代表完成所有人工無障礙驗收。
 
 ## 正式上線後仍需確認
 
-GitHub／Supabase 帳號未連線時，無法驗證正式網址、雲端金鑰、資料庫 migration、Storage 與 Actions 的實際部署。連線並部署後，應確認匿名寫入 401、私人素材 401、兩組密碼登入、上傳、發布成功、公開網站更新及自訂網域的 CORS 設定。
+目前 GitHub Pages 與 Supabase 已連線。正式 API 已驗證雙密碼登入與新版 layout 順序儲存／讀取，測試後已還原原有草稿。既有版本亦已驗證私人附件 401、作者讀取與自動發布成功。自訂網域仍需同步調整 CORS。
 
 60fps 為互動目標；高更新率裝置、低階手機與使用者後續上傳的素材仍需實機 profiling，不承諾所有硬體固定幀率。

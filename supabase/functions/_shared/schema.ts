@@ -100,6 +100,15 @@ export const contentSchema = z
       .object({ title: text(100), artist: text(100), url: mediaUrl })
       .strict(),
     attachments: z.array(attachmentSchema).max(20),
+    layout: z
+      .object({
+        sections: z
+          .array(z.enum(["work", "notes", "about", "attachments", "contact"]))
+          .length(5)
+          .refine((items) => new Set(items).size === 5, "每個區塊只能出現一次"),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type SiteContent = z.infer<typeof contentSchema>;

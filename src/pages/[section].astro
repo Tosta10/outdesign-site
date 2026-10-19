@@ -1,0 +1,6 @@
+---
+import SitePage from '../layouts/SitePage.astro';
+export function getStaticPaths() { return ['work', 'journal', 'about'].map(section => ({params: {section}})); }
+const { section } = Astro.params;
+---
+<SitePage page={section} />

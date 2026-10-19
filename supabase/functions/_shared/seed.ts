@@ -16,8 +16,8 @@ export const initialContent: SiteContent = {
     line2: "留在這裡。",
     description:
       "關於設計、程式，還有那些值得被留下的小事。\n這是我的創作空間，也是持續探索的紀錄。",
-    image: "/assets/prism.svg",
-    alt: "黑色空間中，一道虹彩光穿過銀色圓環",
+    image: "/assets/lunar-landscape.webp",
+    alt: "銀色月光照亮黑色山脈與遠方行星",
   },
   projects: [
     {

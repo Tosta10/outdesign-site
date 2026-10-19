@@ -132,6 +132,34 @@ try {
     () => document.querySelector("audio").currentTime > 0,
   );
   await page.locator("[data-audio-toggle]").click();
+  await page.getByRole("button", { name: "開啟選單", exact: true }).click();
+  await page.getByRole("dialog", { name: "EXPLORE THE SPACE" }).waitFor();
+  await page.keyboard.press("Escape");
+  assert.equal(
+    await page
+      .getByRole("button", { name: "開啟選單", exact: true })
+      .getAttribute("aria-expanded"),
+    "false",
+  );
+  for (const [route, title] of [
+    ["work", "作品"],
+    ["journal", "筆記"],
+    ["about", "關於"],
+  ]) {
+    await page.goto(`${origin}/${route}/`, { waitUntil: "networkidle" });
+    assert.equal(await page.title(), `${title} — OutDesign`);
+    assert.equal(await page.locator("h1").count(), 1);
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+      false,
+      `Overflow on ${route}`,
+    );
+    await page.setViewportSize({ width: 1440, height: 1080 });
+  }
+  await page.goto(origin, { waitUntil: "networkidle" });
   const publicAxe = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
     .analyze();
@@ -161,6 +189,30 @@ try {
   await page.getByRole("tab", { name: "風格" }).click();
   await page.locator(".theme-option.quiet").click();
   await page.locator(".editor-canvas .theme-quiet").waitFor();
+  await page
+    .getByRole("button", { name: "拖曳排序：作品", exact: true })
+    .press("ArrowDown");
+  await page.getByText("所有修改已儲存", { exact: true }).waitFor();
+  assert.equal(
+    (await fetch(api.url + "/api/draft")).status,
+    401,
+    "Draft remains private",
+  );
+  assert.equal(
+    await page
+      .locator(".editor-canvas main>section")
+      .first()
+      .getAttribute("id"),
+    "notes",
+  );
+  await page.getByRole("button", { name: "復原上一步", exact: true }).click();
+  assert.equal(
+    await page
+      .locator(".editor-canvas main>section")
+      .first()
+      .getAttribute("id"),
+    "work",
+  );
   await page.screenshot({ path: "artifacts/editor-desktop.png" });
   const editorAxe = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
@@ -181,42 +233,66 @@ try {
   await page
     .getByRole("button", { name: "上移 OutDesign Lab", exact: true })
     .click();
+  const dragged = page.getByRole("button", {
+    name: "拖曳排序：OutDesign Lab",
+    exact: true,
+  });
+  const drop = page.locator(".editor-canvas [data-category]").first();
+  await dragged.scrollIntoViewIfNeeded();
+  const dragBox = await dragged.boundingBox(),
+    dropBox = await drop.boundingBox();
+  assert.ok(dragBox && dropBox);
+  await page.mouse.move(
+    dragBox.x + dragBox.width / 2,
+    dragBox.y + dragBox.height / 2,
+  );
+  await page.mouse.down();
+  await page.waitForTimeout(240);
+  await page.mouse.move(
+    dropBox.x + dropBox.width / 2,
+    dropBox.y + dropBox.height / 2,
+    { steps: 8 },
+  );
+  await page.waitForTimeout(50);
+  await page.mouse.up();
+  await page.waitForFunction(
+    () =>
+      document.querySelector(".editor-canvas .work-card h3")?.textContent ===
+      "OutDesign Lab",
+  );
+  await page.getByLabel("預覽頁面", { exact: true }).selectOption("journal");
+  await page.locator(".editor-canvas .page-journal").waitFor();
+  await page.getByLabel("預覽頁面", { exact: true }).selectOption("home");
   await page.getByRole("tab", { name: "媒體" }).click();
-  await page
-    .getByLabel("上傳素材", { exact: true })
-    .setInputFiles({
-      name: "study.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aJHkAAAAASUVORK5CYII=",
-        "base64",
-      ),
-    });
+  await page.getByLabel("上傳素材", { exact: true }).setInputFiles({
+    name: "study.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aJHkAAAAASUVORK5CYII=",
+      "base64",
+    ),
+  });
   const imageItem = page
     .locator(".media-item")
     .filter({ hasText: "study.png" });
   await imageItem.getByRole("button", { name: "套用", exact: true }).click();
   await page.getByRole("tab", { name: "媒體" }).click();
-  await page
-    .getByLabel("上傳素材", { exact: true })
-    .setInputFiles({
-      name: "room.wav",
-      mimeType: "audio/wav",
-      buffer: await readFile("public/assets/ambient.wav"),
-    });
+  await page.getByLabel("上傳素材", { exact: true }).setInputFiles({
+    name: "room.wav",
+    mimeType: "audio/wav",
+    buffer: await readFile("public/assets/ambient.wav"),
+  });
   await page
     .locator(".media-item")
     .filter({ hasText: "room.wav" })
     .getByRole("button", { name: "套用", exact: true })
     .click();
   await page.getByRole("tab", { name: "媒體" }).click();
-  await page
-    .getByLabel("上傳素材", { exact: true })
-    .setInputFiles({
-      name: "readme.txt",
-      mimeType: "text/plain",
-      buffer: Buffer.from("Original OutDesign attachment"),
-    });
+  await page.getByLabel("上傳素材", { exact: true }).setInputFiles({
+    name: "readme.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("Original OutDesign attachment"),
+  });
   await page
     .locator(".media-item")
     .filter({ hasText: "readme.txt" })
@@ -237,6 +313,9 @@ try {
     .click({ position: { x: 60, y: 120 } });
   await page.getByLabel("標題第一行", { exact: true }).waitFor();
   await page.setViewportSize({ width: 1440, height: 1080 });
+  await page
+    .getByRole("button", { name: "拖曳排序：作品", exact: true })
+    .press("ArrowDown");
   await page.getByRole("button", { name: "發布", exact: true }).click();
   await page.getByRole("button", { name: "確認發布", exact: true }).click();
   await page
@@ -247,6 +326,11 @@ try {
   assert.equal(after.content.settings.theme, "quiet");
   assert.equal(after.content.projects.length, 4);
   assert.equal(after.content.attachments.length, 1);
+  assert.equal(
+    after.content.layout.sections[0],
+    "notes",
+    "Canvas order persists through publication",
+  );
   const imageAsset = after.content.projects
     .find((p) => p.title === "OutDesign Lab")
     .image.slice(6);
@@ -296,6 +380,10 @@ try {
       "mobile editor",
       "publish",
       "history restore",
+      "four static pages and accessible navigation drawer",
+      "canvas keyboard section reordering and undo",
+      "long-press pointer project reordering",
+      "editor page switching",
       "logout",
       "wrong-password denial",
       "no browser-stored credentials",

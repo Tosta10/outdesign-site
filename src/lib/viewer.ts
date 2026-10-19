@@ -2,17 +2,23 @@ export function initViewer(root: Document | HTMLElement): () => void {
   const abort = new AbortController();
   const listen = (element: EventTarget, type: string, handler: EventListener) =>
     element.addEventListener(type, handler, { signal: abort.signal });
-  const menu = root.querySelector<HTMLElement>(".mobile-nav");
+  const menu = root.querySelector<HTMLDialogElement>(".nav-drawer");
   const toggle = root.querySelector<HTMLButtonElement>("[data-menu-toggle]");
   if (toggle && menu) {
     listen(toggle, "click", () => {
-      menu.hidden = !menu.hidden;
-      toggle.setAttribute("aria-expanded", String(!menu.hidden));
-      toggle.setAttribute("aria-label", menu.hidden ? "開啟選單" : "關閉選單");
+      if (menu.open) menu.close();
+      else menu.showModal();
+      toggle.setAttribute("aria-expanded", String(menu.open));
+      toggle.setAttribute("aria-label", menu.open ? "關閉選單" : "開啟選單");
+      document.documentElement.classList.toggle("nav-open", menu.open);
     });
-    listen(menu, "click", () => {
-      menu.hidden = true;
+    listen(menu, "close", () => {
       toggle.setAttribute("aria-expanded", "false");
+      toggle.setAttribute("aria-label", "開啟選單");
+      document.documentElement.classList.remove("nav-open");
+    });
+    listen(menu, "click", (event) => {
+      if ((event.target as Element).closest("a")) menu.close();
     });
   }
   root.querySelectorAll<HTMLButtonElement>("[data-filter]").forEach((button) =>
@@ -58,6 +64,13 @@ export function initViewer(root: Document | HTMLElement): () => void {
       }
     }),
   );
+  const projectHash = window.location.hash.slice(1);
+  if (/^project-[0-9a-f-]{36}$/i.test(projectHash)) {
+    const dialog = root.querySelector<HTMLDialogElement>(
+      `[id="${projectHash}"]`,
+    );
+    if (dialog && !dialog.open) dialog.showModal();
+  }
   const audio = root.querySelector<HTMLAudioElement>("[data-site-audio]");
   const audioToggle = root.querySelector<HTMLButtonElement>(
     "[data-audio-toggle]",
@@ -96,5 +109,7 @@ export function initViewer(root: Document | HTMLElement): () => void {
   return () => {
     abort.abort();
     audio?.pause();
+    if (menu?.open) menu.close();
+    document.documentElement.classList.remove("nav-open");
   };
 }

@@ -340,3 +340,34 @@ test("content validation rejects script URLs, unknown fields, excessive blocks, 
     false,
   );
 });
+
+test("layout keeps legacy content valid and accepts each section exactly once", () => {
+  assert.equal(contentSchema.safeParse(initialContent).success, true);
+  const sections = ["notes", "work", "about", "contact", "attachments"];
+  assert.equal(
+    contentSchema.safeParse({ ...initialContent, layout: { sections } })
+      .success,
+    true,
+  );
+  assert.equal(
+    contentSchema.safeParse({
+      ...initialContent,
+      layout: { sections: ["work", "work", "about", "contact", "attachments"] },
+    }).success,
+    false,
+  );
+  assert.equal(
+    contentSchema.safeParse({
+      ...initialContent,
+      layout: { sections: ["work"] },
+    }).success,
+    false,
+  );
+  assert.equal(
+    contentSchema.safeParse({
+      ...initialContent,
+      layout: { sections: [...sections.slice(0, 4), "admin"] },
+    }).success,
+    false,
+  );
+});

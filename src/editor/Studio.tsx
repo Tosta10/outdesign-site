@@ -8,7 +8,13 @@ import {
   contentSchema,
 } from "../../supabase/functions/_shared/schema.ts";
 import type { Draft, Media } from "../../supabase/functions/_shared/store.ts";
-import { SiteRenderer } from "../components/SiteRenderer";
+import {
+  SiteRenderer,
+  pageNames,
+  type SitePage,
+} from "../components/SiteRenderer";
+import { defaultSections } from "../components/ContentSection";
+import { useCanvasDrag } from "./useCanvasDrag";
 import { Icon } from "../components/Icon";
 import { initViewer } from "../lib/viewer";
 import { ApiError, prepareUpload, StudioApi } from "./api";
@@ -96,6 +102,10 @@ function Editor({
     [preview, setPreview] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
+  const [page, setPage] = useState<SitePage>(
+    (document.body.dataset.page as SitePage) || "home",
+  );
+  const [layersOpen, setLayersOpen] = useState(false);
   const [saveState, setSaveState] = useState<
       "saved" | "dirty" | "saving" | "error"
     >("saved"),
@@ -178,7 +188,7 @@ function Editor({
   useEffect(() => {
     if (!view.current || !content) return;
     return initViewer(view.current);
-  }, [content, preview, assets]);
+  }, [content, preview, assets, page]);
   useEffect(() => {
     if (!content) return;
     document.title = `${content.settings.name} · 作者模式`;
@@ -217,6 +227,95 @@ function Editor({
     const next = structuredClone(current.current);
     edit(next);
     apply(next);
+  }
+  function moveBlock(from: string, to: string) {
+    const [kind, fromId] = from.split(":"),
+      [targetKind, toId] = to.split(":");
+    if (kind !== targetKind || fromId === toId) return;
+    update((next) => {
+      if (kind === "section") {
+        const sections = [...(next.layout?.sections || defaultSections)];
+        const a = sections.indexOf(fromId as (typeof sections)[number]),
+          b = sections.indexOf(toId as (typeof sections)[number]);
+        if (a < 0 || b < 0) return;
+        sections.splice(b, 0, sections.splice(a, 1)[0]);
+        next.layout = { sections };
+      } else if (kind === "project") {
+        const a = next.projects.findIndex((p) => p.id === fromId),
+          b = next.projects.findIndex((p) => p.id === toId);
+        if (a >= 0 && b >= 0)
+          next.projects.splice(b, 0, next.projects.splice(a, 1)[0]);
+      } else if (kind === "note") {
+        const a = next.notes.findIndex((n) => n.id === fromId),
+          b = next.notes.findIndex((n) => n.id === toId);
+        if (a >= 0 && b >= 0)
+          next.notes.splice(b, 0, next.notes.splice(a, 1)[0]);
+      }
+    });
+  }
+  function stepBlock(id: string, direction: number) {
+    if (!current.current) return;
+    const [kind, item] = id.split(":"),
+      c = current.current;
+    const ids =
+      kind === "section"
+        ? c.layout?.sections || defaultSections
+        : kind === "project"
+          ? c.projects.map((p) => p.id)
+          : c.notes.map((n) => n.id);
+    const index = ids.indexOf(item as never),
+      target = ids[index + direction];
+    if (target) {
+      moveBlock(id, `${kind}:${target}`);
+      setNotice("區塊位置已更新，正在自動儲存。");
+    }
+  }
+  useCanvasDrag(
+    view,
+    Boolean(content && !preview),
+    moveBlock,
+    stepBlock,
+    setNotice,
+  );
+  function addCanvasBlock(kind: "project" | "note") {
+    const id = crypto.randomUUID();
+    if (kind === "project") {
+      if ((current.current?.projects.length || 0) >= 24) return;
+      update((n) =>
+        n.projects.push({
+          id,
+          title: "新的作品",
+          category: "設計",
+          description: "在這裡介紹你的作品。",
+          year: new Date().getUTCFullYear().toString(),
+          image: "/assets/work-quiet.svg",
+          alt: "作品封面",
+          url: "",
+          tone: "silver",
+          demo: false,
+        }),
+      );
+      setPage("work");
+    } else {
+      if ((current.current?.notes.length || 0) >= 30) return;
+      update((n) => {
+        n.settings.showNotes = true;
+        n.notes.push({
+          id,
+          title: "新的筆記",
+          excerpt: "寫下你現在的想法。",
+          date: new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei" })
+            .format(new Date())
+            .replaceAll("/", "."),
+          tag: "隨筆",
+          url: "",
+        });
+      });
+      setPage("journal");
+    }
+    setSelection(`${kind}:${id}`);
+    setTab("content");
+    setPanelOpen(true);
   }
   const saveNow = () => {
     const job = saveQueue.current
@@ -500,7 +599,7 @@ function Editor({
   };
   return (
     <div
-      className={`editor-shell ${panelOpen ? "panel-open" : ""}`}
+      className={`editor-shell ${panelOpen ? "panel-open" : ""} ${!preview ? "has-layers" : ""} ${layersOpen ? "layers-open" : ""}`}
       data-history-tick={historyTick}
     >
       <header className="editor-topbar">
@@ -508,6 +607,18 @@ function Editor({
           <span>{content.settings.name}</span>
           <span className="editor-badge">作者模式</span>
         </div>
+        <select
+          className="editor-page-select"
+          aria-label="預覽頁面"
+          value={page}
+          onChange={(event) => setPage(event.target.value as SitePage)}
+        >
+          {Object.entries(pageNames).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
         <p className={`save-status status-${saveState}`} role="status">
           <span />
           {saveLabels[saveState]}
@@ -581,10 +692,110 @@ function Editor({
           </button>
         </div>
       </header>
+      {!preview && (
+        <aside className="editor-layers" aria-label="頁面與圖層">
+          <div className="layers-title">
+            <span>LAYERS</span>
+            <span>長按拖曳</span>
+          </div>
+          <p className="layer-section-label">頁面</p>
+          <div className="layer-pages">
+            {Object.entries(pageNames).map(([value, label]) => (
+              <button
+                key={value}
+                aria-pressed={page === value}
+                onClick={() => {
+                  setPage(value as SitePage);
+                  setLayersOpen(false);
+                }}
+              >
+                <span>◻</span>
+                {label}
+                <Icon name="diagonal" size={11} />
+              </button>
+            ))}
+          </div>
+          <p className="layer-section-label">首頁區塊</p>
+          <div className="layer-blocks">
+            {(content.layout?.sections || defaultSections).map(
+              (key, index, list) => (
+                <div key={key}>
+                  <button
+                    onClick={() => {
+                      setPage("home");
+                      requestAnimationFrame(() => {
+                        const node = view.current?.querySelector<HTMLElement>(
+                          `[data-layout="section:${key}"]`,
+                        );
+                        node?.scrollIntoView({
+                          block: "center",
+                          behavior: window.matchMedia(
+                            "(prefers-reduced-motion: reduce)",
+                          ).matches
+                            ? "auto"
+                            : "smooth",
+                        });
+                      });
+                    }}
+                  >
+                    {
+                      {
+                        work: "作品",
+                        notes: "筆記",
+                        about: "關於",
+                        attachments: "附件",
+                        contact: "聯絡",
+                      }[key]
+                    }
+                  </button>
+                  <button
+                    aria-label={`上移區塊：${key}`}
+                    disabled={index === 0}
+                    onClick={() => stepBlock(`section:${key}`, -1)}
+                  >
+                    <Icon name="up" size={12} />
+                  </button>
+                  <button
+                    aria-label={`下移區塊：${key}`}
+                    disabled={index === list.length - 1}
+                    onClick={() => stepBlock(`section:${key}`, 1)}
+                  >
+                    <Icon name="down" size={12} />
+                  </button>
+                </div>
+              ),
+            )}
+          </div>
+          <div className="layers-help">
+            <Icon name="edit" size={15} />
+            <p>
+              點選畫布編輯內容。
+              <br />
+              長按 ⠿ 拖曳排序，
+              <br />
+              也可使用方向鍵。
+            </p>
+          </div>
+        </aside>
+      )}
       <div
         className="editor-canvas"
         ref={view}
         onClickCapture={(event) => {
+          if ((event.target as Element).closest("[data-drag-handle]")) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
+          const pageLink = (event.target as Element).closest<HTMLElement>(
+            "[data-page-target]",
+          );
+          if (pageLink?.dataset.pageTarget) {
+            event.preventDefault();
+            event.stopPropagation();
+            setPage(pageLink.dataset.pageTarget as SitePage);
+            return;
+          }
           if (preview) return;
           const element = (event.target as Element).closest<HTMLElement>(
             "[data-edit]",
@@ -605,8 +816,46 @@ function Editor({
           editing={!preview}
           selected={selection}
           privateAssets={assets}
+          page={page}
         />
       </div>
+      {!preview && (
+        <div className="canvas-toolbar" role="toolbar" aria-label="畫布工具">
+          <button
+            aria-label="開關圖層面板"
+            aria-pressed={layersOpen}
+            onClick={() => setLayersOpen((v) => !v)}
+          >
+            <Icon name="menu" size={16} />
+            <span>圖層</span>
+          </button>
+          <i />
+          <button
+            aria-label="新增作品區塊"
+            onClick={() => addCanvasBlock("project")}
+          >
+            <Icon name="plus" size={15} />
+            <span>作品</span>
+          </button>
+          <button
+            aria-label="新增筆記區塊"
+            onClick={() => addCanvasBlock("note")}
+          >
+            <Icon name="plus" size={15} />
+            <span>筆記</span>
+          </button>
+          <button
+            aria-label="開啟素材工具"
+            onClick={() => {
+              setTab("media");
+              setPanelOpen(true);
+            }}
+          >
+            <Icon name="upload" size={15} />
+            <span>素材</span>
+          </button>
+        </div>
+      )}
       {panelOpen && (
         <aside className="editor-panel" aria-label="網站編輯面板">
           <div className="panel-heading">

@@ -1103,3 +1103,499 @@
   color: #b0b0bc;
   margin-bottom: 7px;
 }
+
+/* Lunar workspace: luminance, borders and selection provide depth. */
+.editor-shell {
+  background: #0a0a0a;
+  --layer-width: 172px;
+}
+.editor-topbar {
+  background: #141414;
+  border-color: #ffffff1a;
+}
+.editor-badge {
+  border-color: #ffffff26;
+  background: #ffffff06;
+  color: #ccc;
+}
+.editor-page-select {
+  background: #1c1c1c;
+  color: #d3d3cb;
+  border: 1px solid #ffffff24;
+  border-radius: 5px;
+  font-size: 10px;
+  padding: 6px 9px;
+  min-width: 70px;
+}
+.editor-panel {
+  background: #141414;
+  border-color: #ffffff1a;
+  box-shadow: none;
+}
+.panel-scroll {
+  background: #141414;
+  scrollbar-color: #4b4b4b #141414;
+  padding-bottom: 70px;
+}
+.auth-dialog,
+.publish-dialog {
+  background: #1c1c1c;
+  border-color: #ffffff25;
+  box-shadow: none;
+}
+.auth-symbol {
+  background: #ffffff04;
+  color: #d7d7d1;
+  border-color: #ffffff25;
+}
+.auth-dialog > .eyebrow,
+.panel-heading .eyebrow {
+  color: #aaa9a1;
+}
+.auth-dialog input:not([type="checkbox"]),
+.editor-field input,
+.editor-field textarea,
+.editor-field select {
+  background: #0a0a0a;
+  border-color: #ffffff26;
+}
+.panel-tabs button[aria-selected="true"] {
+  color: #edede6;
+  border-color: #d5d0df;
+}
+.editor-small-button[aria-pressed="true"] {
+  background: #ffffff0c;
+  color: #eee;
+}
+.editor-publish {
+  background: #e9e9e2;
+  color: #151515;
+}
+.editor-layers {
+  position: absolute;
+  z-index: 85;
+  left: 0;
+  top: 58px;
+  bottom: 0;
+  width: var(--layer-width);
+  background: #141414;
+  border-right: 1px solid #ffffff1a;
+  padding: 22px 13px;
+  overflow: auto;
+}
+.layers-title {
+  display: flex;
+  justify-content: space-between;
+  color: #aaa;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1px;
+}
+.layers-title > span:last-child {
+  font-family: var(--font-sans);
+  font-size: 8px;
+  letter-spacing: 0;
+  color: #aaa;
+}
+.layer-section-label {
+  margin: 27px 8px 12px;
+  font-size: 9px;
+  color: #aaa;
+}
+.layer-pages {
+  display: grid;
+  gap: 3px;
+}
+.layer-pages button {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  font-size: 10px;
+  color: #bbb;
+  padding: 10px;
+  border-radius: 5px;
+}
+.layer-pages button > svg {
+  margin-left: auto;
+  color: #888;
+}
+.layer-pages button[aria-pressed="true"] {
+  background: #ffffff0b;
+  color: #fff;
+}
+.layer-pages button > span {
+  color: #aaa;
+}
+.layer-blocks > div {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #ffffff09;
+}
+.layer-blocks > div > button:first-child {
+  flex: 1;
+  text-align: left;
+  padding: 11px 8px;
+  font-size: 10px;
+  color: #ccc;
+}
+.layer-blocks > div > button:not(:first-child) {
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 28px;
+  color: #aaa;
+  padding: 0;
+}
+.layers-help {
+  margin: 35px 8px 0;
+  border-top: 1px solid #ffffff16;
+  padding-top: 20px;
+  color: #aaa;
+}
+.layers-help p {
+  font-size: 9px;
+  line-height: 2;
+  margin-top: 10px;
+}
+.has-layers .editor-canvas {
+  left: var(--layer-width);
+}
+.editor-canvas {
+  background: #0a0a0a;
+}
+.editor-canvas .hero-frame {
+  width: calc(100% - 36px);
+  margin-top: 18px;
+}
+.editor-canvas .site-header {
+  width: 100%;
+  padding: 0 25px;
+  height: 78px;
+}
+.editor-canvas .header-caption,
+.editor-canvas .header-author,
+.editor-canvas .header-divider {
+  display: none;
+}
+.editor-canvas .hero {
+  min-height: 640px;
+  height: auto;
+  padding: 45px 5.7% 290px;
+}
+.editor-canvas .hero-copy {
+  width: 49%;
+}
+.editor-canvas .hero h1 {
+  font-size: clamp(38px, 4.2vw, 67px);
+}
+.editor-canvas .hero-description {
+  font-size: 10px;
+  line-height: 2;
+}
+.editor-canvas .hero .eyebrow {
+  font-size: 6px;
+  letter-spacing: 1.4px;
+}
+.editor-canvas .mission-card {
+  top: 65px;
+  width: 43%;
+  padding: 20px;
+}
+.editor-canvas .mission-body {
+  gap: 13px;
+}
+.editor-canvas .mission-card h2 {
+  font-size: 22px;
+}
+.editor-canvas .mission-description {
+  font-size: 9px;
+}
+.editor-canvas .mission-kicker {
+  font-size: 11px;
+}
+.editor-canvas .mission-study {
+  padding-left: 10px;
+}
+.editor-canvas .mission-values {
+  font-size: 5px;
+  letter-spacing: 1px;
+}
+.editor-canvas .mission-link {
+  font-size: 8px;
+  gap: 8px;
+}
+.editor-canvas .featured-card {
+  bottom: 80px;
+  width: 46%;
+}
+.editor-canvas .section-shell {
+  width: calc(100% - 72px);
+}
+.editor-canvas .page-content > section {
+  padding-block: 80px;
+}
+.editor-canvas .hero-bottom {
+  bottom: 22px;
+}
+.editor-canvas .hero-signature {
+  font-size: 5px;
+  letter-spacing: 0.6px;
+}
+.editor-canvas .work-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.editor-canvas .note-item summary {
+  grid-template-columns: 80px 1fr 22px;
+  gap: 14px;
+}
+.editor-canvas .note-item summary h3 {
+  font-size: 18px;
+}
+.editor-canvas .note-tag {
+  display: none;
+}
+.editor-canvas .note-plus {
+  grid-column: auto;
+  grid-row: auto;
+}
+.editor-canvas .note-body {
+  padding-left: 94px;
+  padding-right: 0;
+}
+.editor-canvas .about-section {
+  gap: 30px;
+}
+.canvas-toolbar {
+  position: absolute;
+  z-index: 95;
+  left: calc(50% + var(--layer-width) / 2);
+  transform: translateX(-50%);
+  bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 8px;
+  border: 1px solid #ffffff30;
+  border-radius: 12px;
+  background: #1c1c1cf5;
+  backdrop-filter: blur(20px);
+}
+.panel-open .canvas-toolbar {
+  left: calc(50% - 177px + var(--layer-width) / 2);
+}
+.canvas-toolbar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 35px;
+  font-size: 9px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  color: #ddd;
+  white-space: nowrap;
+}
+.canvas-toolbar button:hover {
+  background: #ffffff0a;
+}
+.canvas-toolbar button:first-child {
+  display: none;
+}
+.canvas-toolbar i {
+  width: 1px;
+  height: 20px;
+  background: #ffffff1a;
+}
+.canvas-drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2000;
+  border: 1px solid #d5d0df;
+  background: #1c1c1cf5;
+  color: #fff;
+  border-radius: 7px;
+  font-size: 11px;
+  padding: 8px 16px;
+  pointer-events: none;
+  will-change: transform;
+}
+.is-dragging {
+  opacity: 0.4;
+}
+.is-drop-target {
+  outline: 2px solid #d2cddd !important;
+  outline-offset: 5px;
+}
+.is-arranging,
+.is-arranging * {
+  cursor: grabbing !important;
+}
+.editor-canvas [data-layout] {
+  position: relative;
+}
+@media (max-width: 1200px) {
+  .editor-shell {
+    --layer-width: 148px;
+  }
+  .editor-title > .editor-badge {
+    display: none;
+  }
+  .editor-canvas .hero {
+    padding-bottom: 280px;
+  }
+  .editor-canvas .mission-study {
+    display: none;
+  }
+  .editor-canvas .mission-body {
+    grid-template-columns: 1fr;
+  }
+  .editor-canvas .featured-card {
+    width: 65%;
+  }
+  .editor-canvas .about-section {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 1000px) {
+  .has-layers .editor-canvas {
+    left: 0;
+  }
+  .editor-layers {
+    display: none;
+  }
+  .layers-open .editor-layers {
+    display: block;
+    width: 200px;
+    z-index: 96;
+  }
+  .canvas-toolbar,
+  .panel-open .canvas-toolbar {
+    left: calc(50% - 177px);
+  }
+  .canvas-toolbar button:first-child {
+    display: flex;
+  }
+  .editor-page-select {
+    margin-left: 6px;
+  }
+  .save-status {
+    display: none;
+  }
+}
+@media (max-width: 850px) {
+  .canvas-toolbar,
+  .panel-open .canvas-toolbar {
+    left: 50%;
+  }
+  .panel-open .canvas-toolbar {
+    display: none;
+  }
+  .editor-panel {
+    background: #141414;
+    box-shadow: none;
+  }
+  .editor-canvas .hero {
+    padding-bottom: 80px;
+  }
+  .editor-canvas .hero-copy {
+    width: 100%;
+  }
+  .editor-canvas .hero h1 {
+    font-size: 60px;
+  }
+  .editor-canvas .mission-card {
+    position: relative;
+    top: auto;
+    width: 100%;
+    right: auto;
+    margin-top: 40px;
+  }
+  .editor-canvas .mission-body {
+    grid-template-columns: 1.7fr 1fr;
+  }
+  .editor-canvas .mission-study {
+    display: flex;
+  }
+  .editor-canvas .featured-card {
+    position: relative;
+    left: auto;
+    bottom: auto;
+    width: 100%;
+  }
+  .editor-canvas .hero-signature {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .editor-title > span:first-child {
+    font-size: 11px;
+  }
+  .editor-page-select {
+    font-size: 9px;
+    padding: 5px 3px;
+    min-width: 48px;
+    width: 48px;
+    margin-left: 2px;
+  }
+  .editor-top-actions > .icon-button:first-child {
+    display: none;
+  }
+  .editor-layers {
+    top: 54px;
+  }
+  .editor-canvas .hero {
+    padding-top: 35px;
+  }
+  .editor-canvas .hero h1 {
+    font-size: 48px;
+  }
+  .editor-canvas .hero-frame {
+    width: calc(100% - 20px);
+    margin-top: 10px;
+  }
+  .editor-canvas .site-header {
+    padding-inline: 20px;
+  }
+  .editor-canvas .hero-copy > .eyebrow {
+    font-size: 6px;
+  }
+  .editor-canvas .section-shell {
+    width: calc(100% - 44px);
+  }
+  .editor-canvas .work-grid,
+  .editor-canvas .about-section {
+    grid-template-columns: 1fr;
+  }
+  .editor-canvas .note-item summary {
+    grid-template-columns: 1fr 20px;
+  }
+  .editor-canvas .note-item h3 {
+    grid-column: 1;
+  }
+  .editor-canvas .note-plus {
+    grid-column: 2;
+    grid-row: 1/4;
+  }
+  .editor-canvas .note-body {
+    padding-left: 0;
+  }
+  .canvas-toolbar {
+    bottom: 15px;
+  }
+}
+@media (max-width: 360px) {
+  .editor-title {
+    display: none;
+  }
+  .editor-canvas .hero h1 {
+    font-size: 42px;
+  }
+  .editor-canvas .mission-body {
+    grid-template-columns: 1fr;
+  }
+  .editor-canvas .mission-study {
+    display: none;
+  }
+}

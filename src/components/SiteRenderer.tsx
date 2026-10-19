@@ -1,14 +1,18 @@
-import type { SiteContent } from "../../supabase/functions/_shared/schema.ts";
-import { assetUrl } from "../lib/content.ts";
-import { Icon } from "./Icon.tsx";
+import { assetUrl } from "../lib/content";
+import { Icon } from "./Icon";
+import {
+  ContentSection,
+  defaultSections,
+  type SectionProps,
+  type SectionKey,
+} from "./ContentSection";
 
-type Props = {
-  content: SiteContent;
-  api?: string;
-  base?: string;
-  editing?: boolean;
-  selected?: string;
-  privateAssets?: Record<string, string>;
+export type SitePage = "home" | "work" | "journal" | "about";
+export const pageNames: Record<SitePage, string> = {
+  home: "首頁",
+  work: "作品",
+  journal: "筆記",
+  about: "關於",
 };
 export function SiteRenderer({
   content: c,
@@ -17,421 +21,296 @@ export function SiteRenderer({
   editing = false,
   selected = "",
   privateAssets = {},
-}: Props) {
-  const img = (v: string) => assetUrl(v, api, base, privateAssets);
-  const edit = (key: string) => (editing ? { "data-edit": key } : {});
-  const editClass = (key: string) =>
-    editing ? ` editable ${selected === key ? "is-selected" : ""}` : "";
-  const isExampleEmail = c.contact.email.endsWith("@example.com");
+  page = "home",
+}: SectionProps & { page?: SitePage }) {
+  const url = (route = "") =>
+    `${base.replace(/\/$/, "")}/${route}${route ? "/" : ""}`;
+  const img = (value: string) => assetUrl(value, api, base, privateAssets);
+  const scenic =
+    c.hero.image === "/assets/prism.svg"
+      ? "/assets/lunar-landscape.webp"
+      : c.hero.image;
+  const first = c.projects[0];
+  const sections: SectionKey[] =
+    page === "home"
+      ? c.layout?.sections || defaultSections
+      : page === "work"
+        ? ["work", "attachments"]
+        : page === "journal"
+          ? ["notes"]
+          : ["about", "contact"];
+  const links = [
+    ["home", "首頁", "Home"],
+    ["work", "作品", "Selected work"],
+    ["journal", "筆記", "Journal"],
+    ["about", "關於", "About & contact"],
+  ] as const;
   return (
-    <div className={`site theme-${c.settings.theme}`}>
+    <div className={`site theme-${c.settings.theme} page-${page}`}>
       <a className="skip-link" href="#main">
         跳至主要內容
       </a>
-      <header className="site-header">
-        <a
-          className="wordmark"
-          href="#top"
-          aria-label={`${c.settings.name} 首頁`}
-        >
-          <span className="brand-mark">
-            o<span />
-          </span>
-          {c.settings.name}
-          <span className="wordmark-sub">PERSONAL SPACE</span>
-        </a>
-        <nav className="desktop-nav" aria-label="主要導覽">
-          <a href="#work">
-            作品<span>{String(c.projects.length).padStart(2, "0")}</span>
+      <div className="hero-frame">
+        {page === "home" && scenic && (
+          <img
+            className="lunar-backdrop"
+            src={img(scenic)}
+            alt={
+              c.hero.image === "/assets/prism.svg" ||
+              c.hero.image === "/assets/lunar-landscape.webp"
+                ? ""
+                : c.hero.alt
+            }
+            width="1672"
+            height="941"
+            fetchPriority="high"
+            decoding="async"
+          />
+        )}
+        <header className="site-header">
+          <a
+            className="wordmark"
+            data-page-target="home"
+            href={editing ? "#top" : url()}
+            aria-label={`${c.settings.name} 首頁`}
+          >
+            <span className="brand-moon" aria-hidden="true" />
+            <span>{c.settings.name}</span>
           </a>
-          <a href="#notes" hidden={!c.settings.showNotes}>
-            筆記
-          </a>
-          <a href="#about">關於</a>
-        </nav>
-        <a className="contact-pill" href="#contact">
-          <span className="status-dot" />
-          一起聊聊
-          <Icon name="diagonal" size={14} />
-        </a>
-        <button
-          className="icon-button mobile-menu"
-          aria-label="開啟選單"
-          aria-expanded="false"
-          data-menu-toggle
-        >
-          <Icon name="menu" />
-        </button>
-        <nav className="mobile-nav" aria-label="手機導覽" hidden>
-          <a href="#work">作品</a>
-          {c.settings.showNotes && <a href="#notes">筆記</a>}
-          <a href="#about">關於</a>
-          <a href="#contact">聯絡</a>
-        </nav>
-      </header>
-      <main id="main">
-        <section
-          className={`hero section-shell${editClass("hero")}`}
-          id="top"
-          {...edit("hero")}
-        >
-          <div className="hero-copy">
+          <p className="header-caption">INDEPENDENT DESIGN & DEVELOPMENT</p>
+          <div className="header-actions">
+            <button
+              className="header-author"
+              data-studio-launch
+              aria-label="開啟作者登入"
+            >
+              <Icon name="lock" size={13} />
+              <span>作者入口</span>
+            </button>
+            <span className="header-divider" />
+            <button
+              className="menu-toggle"
+              data-menu-toggle
+              aria-controls="site-navigation"
+              aria-expanded="false"
+              aria-label="開啟選單"
+            >
+              <span>探索</span>
+              <Icon name="menu" size={20} />
+            </button>
+          </div>
+        </header>
+        {page === "home" ? (
+          <section
+            className={`hero${editing ? ` editable ${selected === "hero" ? "is-selected" : ""}` : ""}`}
+            id="top"
+            data-edit={editing ? "hero" : undefined}
+          >
+            <div className="hero-copy">
+              <p className="eyebrow">{c.hero.eyebrow}</p>
+              <h1>
+                {c.hero.line1}
+                <br />
+                <span>{c.hero.line2}</span>
+              </h1>
+              <p className="hero-description preserve-lines">
+                {c.hero.description}
+              </p>
+              <a className="hero-explore" href="#work">
+                <span className="circle-arrow">
+                  <Icon name="arrow" size={19} />
+                </span>
+                <span className="hairline" />
+                <span>探索我的作品</span>
+              </a>
+            </div>
+            <a
+              className="mission-card glass-surface"
+              data-page-target="about"
+              href={url("about")}
+              data-optical-card
+            >
+              <div className="card-meta">
+                <span>
+                  01 <i />
+                </span>
+                <span>THE WAY I CREATE</span>
+              </div>
+              <div className="mission-body">
+                <div>
+                  <p className="mission-kicker">A quieter kind of digital.</p>
+                  <h2 className="preserve-lines">{c.about.title}</h2>
+                  <p className="mission-description">{c.about.body}</p>
+                  <span className="mission-link">
+                    <span className="circle-arrow">
+                      <Icon name="arrow" size={18} />
+                    </span>
+                    關於我的創作
+                  </span>
+                </div>
+                <div className="mission-study">
+                  <img
+                    src={img("/assets/lunar-landscape.webp")}
+                    alt="銀光映照的月面山脈"
+                    width="320"
+                    height="440"
+                    loading="lazy"
+                  />
+                  <div className="mission-values">
+                    DESIGN
+                    <br />
+                    DEVELOPMENT
+                    <br />
+                    POSSIBILITIES
+                  </div>
+                </div>
+              </div>
+            </a>
+            {first && (
+              <a
+                className="featured-card glass-surface"
+                data-page-target="work"
+                href={`${url("work")}#project-${first.id}`}
+              >
+                <div className="card-meta">
+                  <span>
+                    02 <i />
+                  </span>
+                  <span>SELECTED PROJECT</span>
+                </div>
+                <div className="featured-body">
+                  <img
+                    src={img(first.image)}
+                    alt={first.alt}
+                    width="340"
+                    height="220"
+                    loading="lazy"
+                  />
+                  <div>
+                    <h2>{first.title}</h2>
+                    <p>{first.description}</p>
+                    <span className="text-link">
+                      查看作品 <Icon name="arrow" size={14} />
+                    </span>
+                  </div>
+                </div>
+              </a>
+            )}
+            <div className="hero-bottom">
+              <a className="scroll-cue" href="#work">
+                <span className="scroll-line" />
+                SCROLL TO DISCOVER
+              </a>
+              <div className="page-indicators">
+                <span>01</span>
+                <i />
+                <span className="muted">/ 04</span>
+              </div>
+              <span className="hero-signature">
+                <i /> A SPACE FOR WHAT COMES NEXT
+              </span>
+            </div>
+          </section>
+        ) : (
+          <div className="page-intro" id="top">
             <p className="eyebrow">
-              <span className="tiny-cross">✳</span>
-              {c.hero.eyebrow}
+              OUTDESIGN /{" "}
+              {page === "work"
+                ? "SELECTED WORK"
+                : page === "journal"
+                  ? "JOURNAL"
+                  : "ABOUT"}
             </p>
             <h1>
-              {c.hero.line1}
-              <br />
-              <span className="hero-second">
-                {c.hero.line2}
-                <span className="iridescent-dot" />
-              </span>
+              {page === "work" ? (
+                <>
+                  想法，<em>成為作品。</em>
+                </>
+              ) : page === "journal" ? (
+                <>
+                  思考，<em>留下痕跡。</em>
+                </>
+              ) : (
+                <>
+                  設計與技術之間，<em>保留一點好奇。</em>
+                </>
+              )}
             </h1>
-            <p className="hero-description preserve-lines">
-              {c.hero.description}
+            <p>
+              {page === "work"
+                ? "一個持續生長的作品集。關於介面、體驗與實驗。"
+                : page === "journal"
+                  ? "記錄靈感、日常觀察，以及創作過程中的一些發現。"
+                  : "讓想法成為可以被看見、被使用的事物。"}
             </p>
-            <div className="hero-actions">
-              <a className="button button-white" href="#work">
-                探索作品
-                <Icon name="diagonal" size={17} />
-              </a>
-              <a className="text-link" href="#about">
-                關於這個空間
-                <Icon name="arrow" size={16} />
-              </a>
-            </div>
-            <p className="hero-footnote">
-              <span className="hairline" />
-              DESIGN · DEVELOPMENT · EXPLORATION
-            </p>
+            <span className="page-intro-number">
+              {page === "work" ? "02" : page === "journal" ? "03" : "04"}
+            </span>
           </div>
-          <figure className="hero-art">
-            <div className="art-corner corner-tl" />
-            <div className="art-corner corner-br" />
-            {c.hero.image && (
-              <img
-                src={img(c.hero.image)}
-                alt={c.hero.alt}
-                width="780"
-                height="820"
-                fetchPriority="high"
-                decoding="async"
-              />
-            )}
-            <figcaption>
-              <span>OBJECT STUDY — 001</span>
-              <span>LIGHT, IN A QUIET SPACE.</span>
-            </figcaption>
-          </figure>
-          <a className="scroll-cue" href="#work">
-            <span>SCROLL TO EXPLORE</span>
-            <span>↓</span>
-          </a>
-        </section>
-        <section className="work-section section-shell" id="work">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow section-number">01 / SELECTED WORK</p>
-              <h2>
-                一些作品，<span className="muted">一些探索。</span>
-              </h2>
-            </div>
-            <p className="section-intro">
-              從想法到實作，
-              <br />
-              讓每一個細節都有它的理由。
-            </p>
-          </div>
-          <div className="work-toolbar">
-            <div className="filters" role="group" aria-label="作品分類">
-              {["全部", "設計", "開發", "實驗"].map((tag, i) => (
-                <button
-                  key={tag}
-                  data-filter={tag}
-                  aria-pressed={i === 0}
-                  className={i === 0 ? "active" : ""}
-                >
-                  {tag}
-                  {i === 0 && (
-                    <span>{String(c.projects.length).padStart(2, "0")}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-            <span className="tiny-label">A COLLECTION OF THINGS I MAKE</span>
-          </div>
-          <div className="work-grid">
-            {c.projects.map((p, i) => (
-              <article
-                key={p.id}
-                className={`work-card work-${p.tone} ${editing && selected === `project:${p.id}` ? "is-selected" : ""}`}
-                data-category={p.category}
-                data-edit={editing ? `project:${p.id}` : undefined}
-              >
-                <button
-                  className="work-image-button"
-                  data-open-dialog={`project-${p.id}`}
-                  aria-label={`查看作品：${p.title}`}
-                >
-                  <div className="work-image">
-                    {p.image && (
-                      <img
-                        src={img(p.image)}
-                        alt={p.alt}
-                        width="1200"
-                        height="820"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    )}
-                  </div>
-                  <span className="work-index">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span className="work-arrow">
-                    <Icon name="diagonal" />
-                  </span>
-                  {p.demo && <span className="demo-tag">概念示範</span>}
-                </button>
-                <div className="work-caption">
-                  <div>
-                    <h3>{p.title}</h3>
-                    <p>
-                      {p.category}
-                      <span>／</span>
-                      {p.year}
-                    </p>
-                  </div>
-                  <span className="caption-index">↗</span>
-                </div>
-                <dialog id={`project-${p.id}`} className="detail-dialog">
-                  <button
-                    className="icon-button dialog-close"
-                    data-close-dialog
-                    aria-label="關閉作品"
-                  >
-                    <Icon name="close" />
-                  </button>
-                  <p className="eyebrow">
-                    {p.category} / {p.year}
-                    {p.demo ? " / 概念示範" : ""}
-                  </p>
-                  <h2>{p.title}</h2>
-                  {p.image && (
-                    <img
-                      src={img(p.image)}
-                      alt={p.alt}
-                      width="1200"
-                      height="820"
-                      loading="lazy"
-                    />
-                  )}
-                  <p className="preserve-lines">{p.description}</p>
-                  {p.url && (
-                    <a
-                      href={p.url}
-                      className="button button-white"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      前往作品
-                      <Icon name="diagonal" size={17} />
-                    </a>
-                  )}
-                </dialog>
-              </article>
-            ))}
-          </div>
-          {c.projects.length === 0 && (
-            <p className="empty-state">作品正在整理中，敬請期待。</p>
-          )}
-        </section>
-        {c.settings.showNotes && (
-          <section className="notes-section section-shell" id="notes">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow section-number">02 / NOTES & THOUGHTS</p>
-                <h2>
-                  想法的<span className="muted">切片。</span>
-                </h2>
-              </div>
-              <span className="section-intro">寫下來，讓思考繼續發生。</span>
-            </div>
-            <div className="notes-list">
-              {c.notes.map((n) => (
-                <details
-                  key={n.id}
-                  className={`note-item ${editing && selected === `note:${n.id}` ? "is-selected" : ""}`}
-                  data-edit={editing ? `note:${n.id}` : undefined}
-                >
-                  <summary>
-                    <span className="note-date">{n.date}</span>
-                    <h3>{n.title}</h3>
-                    <span className="note-tag">{n.tag}</span>
-                    <span className="note-plus">
-                      <Icon name="plus" size={18} />
-                    </span>
-                  </summary>
-                  <div className="note-body">
-                    <p className="preserve-lines">{n.excerpt}</p>
-                    {n.url && (
-                      <a
-                        className="text-link"
-                        href={n.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        繼續閱讀
-                        <Icon name="diagonal" size={16} />
-                      </a>
-                    )}
-                  </div>
-                </details>
-              ))}
-            </div>
-          </section>
         )}
-        <section
-          className={`about-section section-shell${editClass("about")}`}
-          id="about"
-          {...edit("about")}
-        >
-          <div className="about-heading">
-            <p className="eyebrow section-number">03 / A LITTLE ABOUT ME</p>
-            <h2 className="preserve-lines">{c.about.title}</h2>
-            <div className="tag-list">
-              {c.about.tags.map((tag) => (
-                <span key={tag}>{tag}</span>
-              ))}
-            </div>
-          </div>
-          <div className="about-copy">
-            <p className="preserve-lines">{c.about.body}</p>
-            {c.settings.showMusic && (
-              <div
-                className="music-widget"
-                data-edit={editing ? "music" : undefined}
-              >
-                <button
-                  className="music-play"
-                  data-audio-toggle
-                  aria-label="播放示範音樂"
-                  aria-pressed="false"
-                  disabled={!c.music.url}
-                >
-                  <span data-play-icon>
-                    <Icon name="play" size={18} />
-                  </span>
-                  <span data-pause-icon hidden>
-                    <Icon name="pause" size={18} />
-                  </span>
-                </button>
-                <div>
-                  <span className="tiny-label">ON MY FREQUENCY</span>
-                  <p>{c.music.title}</p>
-                  <span className="music-artist">{c.music.artist}</span>
-                </div>
-                <div className="sound-bars" aria-hidden="true">
-                  <i />
-                  <i />
-                  <i />
-                  <i />
-                  <i />
-                </div>
-                {c.music.url && (
-                  <audio
-                    data-site-audio
-                    preload="none"
-                    src={img(c.music.url)}
-                  />
-                )}
-              </div>
-            )}
-            <p className="audio-feedback" data-audio-feedback role="status" />
-          </div>
-        </section>
-        {c.attachments.length > 0 && (
-          <section className="attachments section-shell">
-            <p className="eyebrow">RESOURCES / 下載附件</p>
-            {c.attachments.map((a) => (
+      </div>
+      <dialog
+        className="nav-drawer"
+        id="site-navigation"
+        aria-labelledby="drawer-title"
+      >
+        <div className="drawer-top">
+          <span id="drawer-title">EXPLORE THE SPACE</span>
+          <button
+            className="icon-button"
+            data-close-dialog
+            aria-label="關閉選單"
+          >
+            <Icon name="close" />
+          </button>
+        </div>
+        <nav aria-label="主要導覽">
+          {links
+            .filter(([key]) => key !== "journal" || c.settings.showNotes)
+            .map(([key, label, english], i) => (
               <a
-                key={a.id}
-                href={img(a.url)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="attachment-link"
+                key={key}
+                data-page-target={key}
+                href={url(key === "home" ? "" : key)}
+                aria-current={page === key ? "page" : undefined}
               >
-                <Icon name="file" />
-                <span>{a.name}</span>
-                <span>{a.label}</span>
-                <Icon name="diagonal" size={16} />
+                <span className="nav-index">0{i + 1}</span>
+                <span>
+                  {label}
+                  <small>{english}</small>
+                </span>
+                <Icon name="diagonal" />
               </a>
             ))}
-          </section>
-        )}
-        <section
-          className={`contact-section section-shell${editClass("contact")}`}
-          id="contact"
-          {...edit("contact")}
-        >
-          <div className="contact-top">
-            <p className="eyebrow section-number">04 / LET'S MAKE SOMETHING</p>
-            <span className="contact-spark">✳</span>
-          </div>
-          <div className="contact-main">
-            <h2 className="preserve-lines">{c.contact.headline}</h2>
-            <a
-              className="contact-orbit"
-              href={
-                isExampleEmail ? "#contact-email" : `mailto:${c.contact.email}`
-              }
-              aria-label={isExampleEmail ? "查看示範聯絡資訊" : "寄信聯絡"}
-            >
-              <Icon name="diagonal" size={34} />
-            </a>
-          </div>
-          <div className="contact-bottom">
-            <a
-              id="contact-email"
-              className="email-link"
-              href={isExampleEmail ? undefined : `mailto:${c.contact.email}`}
-            >
-              {c.contact.email}
-            </a>
-            {isExampleEmail && (
-              <span className="tiny-label">示範信箱 · 請於作者模式修改</span>
-            )}
-            <div className="social-links">
-              {c.contact.github && (
-                <a
-                  href={c.contact.github}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  GitHub ↗
-                </a>
-              )}
-              {c.contact.instagram && (
-                <a
-                  href={c.contact.instagram}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Instagram ↗
-                </a>
-              )}
-            </div>
-          </div>
-        </section>
+        </nav>
+        <div className="drawer-bottom">
+          <span>MADE WITH INTENTION.</span>
+          <button data-studio-launch data-close-dialog>
+            作者入口 <Icon name="lock" size={12} />
+          </button>
+        </div>
+      </dialog>
+      <main id="main" className="page-content">
+        {sections.map((section) => (
+          <ContentSection
+            key={section}
+            section={section}
+            content={c}
+            api={api}
+            base={base}
+            editing={editing}
+            selected={selected}
+            privateAssets={privateAssets}
+          />
+        ))}
       </main>
       <footer className="site-footer section-shell">
         <div>
-          <a className="footer-brand" href="#top">
+          <a className="footer-brand" href={url()}>
+            <span className="brand-moon" />
             {c.settings.name}
-            <span className="iridescent-dot small" />
           </a>
-          <p>MADE WITH INTENTION.</p>
+          <p>A LITTLE MORE INTENTION. A LITTLE LESS NOISE.</p>
         </div>
         <div className="footer-meta">
           <span>
@@ -441,10 +320,11 @@ export function SiteRenderer({
             <Icon name="lock" size={12} />
             作者模式
           </button>
-          <a href="#top">回到頂端 ↑</a>
+          <a href="#top" aria-label="回到頂端">
+            ↑
+          </a>
         </div>
       </footer>
-      <div className="site-toast" role="status" data-site-toast hidden />
     </div>
   );
 }
