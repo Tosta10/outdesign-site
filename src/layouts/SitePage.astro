@@ -3,6 +3,7 @@ import { SiteRenderer, type SitePage } from '../components/SiteRenderer';
 import { loadPublicContent } from '../lib/content';
 import '../styles/site.css';
 import '../styles/effects.css';
+import '../styles/canvas.css';
 const { page = 'home' } = Astro.props as {page?: SitePage};
 const { content, version } = await loadPublicContent();
 const base = import.meta.env.BASE_URL;

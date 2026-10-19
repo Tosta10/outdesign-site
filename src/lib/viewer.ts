@@ -1,5 +1,6 @@
 import { initEffects } from "./effects";
 export function initViewer(root: Document | HTMLElement): () => void {
+  if (root.querySelector('.site[data-editing="true"]')) return () => {};
   const disposeEffects = initEffects(root);
   const abort = new AbortController();
   const listen = (element: EventTarget, type: string, handler: EventListener) =>

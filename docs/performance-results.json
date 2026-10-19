@@ -6,22 +6,22 @@
     "best-practices": 100,
     "seo": 100
   },
-  "lcpMs": 1806,
+  "lcpMs": 1804,
   "cls": 0,
   "totalBlockingTimeMs": 0,
   "inp": "Requires real-user field measurement after deployment",
-  "initialJavaScriptGzipBytes": 2829,
+  "initialJavaScriptGzipBytes": 2844,
   "assets": [
     {
-      "file": "bootstrap.Oe2VxnI5.js",
-      "bytes": 162904,
-      "gzipBytes": 47675,
+      "file": "bootstrap.ByOXgoC6.css",
+      "bytes": 27896,
+      "gzipBytes": 6594,
       "initiallyLoaded": false
     },
     {
-      "file": "bootstrap.pXLv9Dhz.css",
-      "bytes": 24559,
-      "gzipBytes": 5893,
+      "file": "bootstrap.CNdHRUG5.js",
+      "bytes": 190200,
+      "gzipBytes": 55447,
       "initiallyLoaded": false
     },
     {
@@ -37,15 +37,15 @@
       "initiallyLoaded": false
     },
     {
-      "file": "SitePage.astro_astro_type_script_index_0_lang.BKwERioT.js",
-      "bytes": 6821,
-      "gzipBytes": 2829,
+      "file": "SitePage.astro_astro_type_script_index_0_lang.DB0nDPB6.js",
+      "bytes": 6883,
+      "gzipBytes": 2844,
       "initiallyLoaded": true
     },
     {
-      "file": "SitePage.CzLJh079.css",
-      "bytes": 25490,
-      "gzipBytes": 6757,
+      "file": "SitePage.BkSPko1L.css",
+      "bytes": 27788,
+      "gzipBytes": 7324,
       "initiallyLoaded": false
     }
   ]

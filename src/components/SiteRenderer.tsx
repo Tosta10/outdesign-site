@@ -4,6 +4,7 @@ import {
   defaultInteractions,
 } from "../../supabase/functions/_shared/schema";
 import { assetUrl } from "../lib/content";
+import { CanvasPanels } from "./CanvasPanels";
 import { Icon } from "./Icon";
 import {
   ContentSection,
@@ -47,6 +48,18 @@ export function SiteRenderer({
   const sections = (c.layout?.sections || defaultSections).filter((key) =>
     allowed[page].includes(key),
   );
+  const pageLayout = c.workspace?.pages?.[page];
+  const panels = (
+    <CanvasPanels
+      content={c}
+      page={page}
+      api={api}
+      base={base}
+      editing={editing}
+      selected={selected}
+      privateAssets={privateAssets}
+    />
+  );
   const effects = c.interactions || defaultInteractions;
   const design = c.design || defaultDesign;
   const styles = Object.fromEntries(
@@ -66,6 +79,12 @@ export function SiteRenderer({
       typeof value === "number" ? `${value}px` : value,
     ]),
   ) as CSSProperties;
+  if (pageLayout) {
+    (styles as Record<string, unknown>)["--workspace-gap"] =
+      `${pageLayout.gap}px`;
+    (styles as Record<string, unknown>)["--workspace-padding"] =
+      `${pageLayout.padding}px`;
+  }
   const links = [
     ["home", "首頁", "Home"],
     ["work", "作品", "Selected work"],
@@ -75,8 +94,8 @@ export function SiteRenderer({
   ] as const;
   return (
     <div
-      className={`site theme-${c.settings.theme} page-${page}`}
-      style={c.design ? styles : undefined}
+      className={`site theme-${c.settings.theme === "verdant" ? "verdant" : "prism"} page-${page}`}
+      style={c.design || pageLayout ? styles : undefined}
       data-card-effect={effects.card}
       data-tilt={effects.tilt}
       data-damping={effects.damping}
@@ -89,7 +108,7 @@ export function SiteRenderer({
       </a>
       <main id="main">
         <div className="hero-frame">
-          {page === "home" && scenic && (
+          {pageLayout?.builtins !== false && page === "home" && scenic && (
             <img
               className="lunar-backdrop"
               src={img(scenic)}
@@ -138,7 +157,7 @@ export function SiteRenderer({
               </button>
             </div>
           </header>
-          {page === "home" ? (
+          {pageLayout?.builtins === false ? null : page === "home" ? (
             <section
               className={`hero${editing ? ` editable ${selected === "hero" ? "is-selected" : ""}` : ""}`}
               id="top"
@@ -351,8 +370,9 @@ export function SiteRenderer({
             </button>
           </div>
         </dialog>
+        {pageLayout?.position === "before" && panels}
         <div className="page-content">
-          {sections.map((section) => (
+          {(pageLayout?.builtins === false ? [] : sections).map((section) => (
             <ContentSection
               key={section}
               section={section}
@@ -365,6 +385,7 @@ export function SiteRenderer({
             />
           ))}
         </div>
+        {pageLayout?.position !== "before" && panels}
       </main>
       <footer className="site-footer section-shell">
         <div>

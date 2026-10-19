@@ -14,6 +14,10 @@ import {
   type SitePage,
 } from "../components/SiteRenderer";
 import { defaultSections } from "../components/ContentSection";
+import { WorkspacePanel, LayerTree } from "./WorkspacePanel";
+import { ScopedCode } from "./ScopedCode";
+import { useFreeLayout } from "./useFreeLayout";
+import { selectedForPage } from "../lib/workspace";
 import { useCanvasDrag } from "./useCanvasDrag";
 import { Icon } from "../components/Icon";
 import { initViewer } from "../lib/viewer";
@@ -99,7 +103,7 @@ function Editor({
   const [content, setContent] = useState<SiteContent | null>(null),
     [selection, setSelection] = useState<Selection>("hero"),
     [tab, setTab] = useState<
-      "content" | "theme" | "media" | "interactions" | "code"
+      "content" | "theme" | "media" | "interactions" | "code" | "layout"
     >("content");
   const [panelOpen, setPanelOpen] = useState(true),
     [preview, setPreview] = useState(false),
@@ -109,6 +113,9 @@ function Editor({
     (document.body.dataset.page as SitePage) || "home",
   );
   const [layersOpen, setLayersOpen] = useState(false);
+  const [device, setDevice] = useState("auto"),
+    [zoom, setZoom] = useState(1),
+    [snap, setSnap] = useState(true);
   const codeDirty = useRef(false);
   function discardCode() {
     if (!codeDirty.current) return true;
@@ -118,9 +125,25 @@ function Editor({
     return true;
   }
   function changeTab(
-    value: "content" | "theme" | "media" | "interactions" | "code",
+    value: "content" | "theme" | "media" | "interactions" | "code" | "layout",
   ) {
     if (discardCode()) setTab(value);
+  }
+  function changePage(value: SitePage) {
+    if (!discardCode()) return;
+    setPage(value);
+    if (current.current)
+      setSelection(selectedForPage(current.current, value) as Selection);
+    setTab("content");
+  }
+  function selectLayer(value: Selection) {
+    if (!discardCode()) return;
+    setSelection(value);
+    setTab(value.startsWith("node:") ? "layout" : "content");
+    setPanelOpen(true);
+  }
+  function replaceContent(next: SiteContent) {
+    apply(next);
   }
   function closePanel() {
     if (discardCode()) setPanelOpen(false);
@@ -191,6 +214,7 @@ function Editor({
       saved.current = JSON.stringify(draft.content);
       conflicts.current = false;
       setContent(draft.content);
+      setSelection(selectedForPage(draft.content, page) as Selection);
       setMedia(files.media);
       setHistory(versions.versions);
       setSaveState("saved");
@@ -206,7 +230,7 @@ function Editor({
     };
   }, []);
   useEffect(() => {
-    if (!view.current || !content) return;
+    if (!view.current || !content || !preview) return;
     return initViewer(view.current);
   }, [content, preview, assets, page]);
   useEffect(() => {
@@ -253,7 +277,21 @@ function Editor({
       [targetKind, toId] = to.split(":");
     if (kind !== targetKind || fromId === toId) return;
     update((next) => {
-      if (kind === "section") {
+      if (kind === "node") {
+        const list = next.workspace?.nodes;
+        if (!list) return;
+        const a = list.findIndex((node) => node.id === fromId),
+          b = list.findIndex((node) => node.id === toId);
+        if (
+          a < 0 ||
+          b < 0 ||
+          list[a].locked ||
+          list[a].parent !== list[b].parent ||
+          list[a].page !== list[b].page
+        )
+          return;
+        list.splice(b, 0, list.splice(a, 1)[0]);
+      } else if (kind === "section") {
         const sections = [...(next.layout?.sections || defaultSections)];
         const a = sections.indexOf(fromId as (typeof sections)[number]),
           b = sections.indexOf(toId as (typeof sections)[number]);
@@ -278,21 +316,30 @@ function Editor({
     const [kind, item] = id.split(":"),
       c = current.current;
     const ids =
-      kind === "section"
-        ? (c.layout?.sections || defaultSections).filter((key) =>
-            (
-              ({
-                home: [],
-                work: ["work"],
-                journal: ["notes"],
-                about: ["about", "contact"],
-                resources: ["attachments"],
-              }) as Record<SitePage, string[]>
-            )[page].includes(key),
-          )
-        : kind === "project"
-          ? c.projects.map((p) => p.id)
-          : c.notes.map((n) => n.id);
+      kind === "node"
+        ? (c.workspace?.nodes || [])
+            .filter(
+              (node) =>
+                node.page === page &&
+                node.parent ===
+                  c.workspace?.nodes.find((node) => node.id === item)?.parent,
+            )
+            .map((node) => node.id)
+        : kind === "section"
+          ? (c.layout?.sections || defaultSections).filter((key) =>
+              (
+                ({
+                  home: [],
+                  work: ["work"],
+                  journal: ["notes"],
+                  about: ["about", "contact"],
+                  resources: ["attachments"],
+                }) as Record<SitePage, string[]>
+              )[page].includes(key),
+            )
+          : kind === "project"
+            ? c.projects.map((p) => p.id)
+            : c.notes.map((n) => n.id);
     const index = ids.indexOf(item as never),
       target = ids[index + direction];
     if (target) {
@@ -306,6 +353,18 @@ function Editor({
     moveBlock,
     stepBlock,
     setNotice,
+  );
+  useFreeLayout(
+    view,
+    Boolean(content && !preview),
+    content?.workspace?.nodes || [],
+    (id, patch) =>
+      update((next) => {
+        const node = next.workspace?.nodes.find((node) => node.id === id);
+        if (node) Object.assign(node, patch);
+      }),
+    (id) => setSelection(`node:${id}`),
+    snap,
   );
   function addCanvasBlock(kind: "project" | "note") {
     const id = crypto.randomUUID();
@@ -535,24 +594,39 @@ function Editor({
         next.music.title = m.name.replace(/\.[^.]+$/, "");
         next.settings.showMusic = true;
         setSelection("music");
+        setPage("about");
       } else if (m.kind === "image") {
         const project =
           selection.startsWith("project:") &&
           next.projects.find((p) => p.id === selection.slice(8));
-        if (project) project.image = value;
+        const canvasImage =
+          selection.startsWith("node:") &&
+          next.workspace?.nodes.find(
+            (node) => node.id === selection.slice(5) && node.type === "image",
+          );
+        if (canvasImage) canvasImage.image = value;
+        else if (project) project.image = value;
         else {
           next.hero.image = value;
           setSelection("hero");
+          setPage("home");
         }
-      } else
+      } else {
+        setPage("resources");
+        setSelection("attachments");
         next.attachments.push({
           id: crypto.randomUUID(),
           name: m.name,
           url: value,
           label: `${(m.size / 1_000_000).toFixed(1)} MB`,
         });
+      }
     });
-    changeTab("content");
+    changeTab(
+      selection.startsWith("node:") && m.kind === "image"
+        ? "layout"
+        : "content",
+    );
     setNotice("素材已套用至草稿。");
   }
   async function removeMedia(m: Media) {
@@ -642,7 +716,7 @@ function Editor({
           className="editor-page-select"
           aria-label="預覽頁面"
           value={page}
-          onChange={(event) => setPage(event.target.value as SitePage)}
+          onChange={(event) => changePage(event.target.value as SitePage)}
         >
           {Object.entries(pageNames).map(([value, label]) => (
             <option key={value} value={value}>
@@ -739,7 +813,7 @@ function Editor({
                 key={value}
                 aria-pressed={page === value}
                 onClick={() => {
-                  setPage(value as SitePage);
+                  changePage(value as SitePage);
                   setLayersOpen(false);
                 }}
               >
@@ -767,6 +841,19 @@ function Editor({
                 <div key={key}>
                   <button
                     onClick={() => {
+                      selectLayer(
+                        {
+                          work: content.projects[0]
+                            ? `project:${content.projects[0].id}`
+                            : "projects",
+                          notes: content.notes[0]
+                            ? `note:${content.notes[0].id}`
+                            : "notes",
+                          about: "about",
+                          contact: "contact",
+                          attachments: "attachments",
+                        }[key] as Selection,
+                      );
                       requestAnimationFrame(() => {
                         const node = view.current?.querySelector<HTMLElement>(
                           `[data-layout="section:${key}"]`,
@@ -809,6 +896,54 @@ function Editor({
                 </div>
               ))}
           </div>
+          {page === "home" && (
+            <button className="node-layer" onClick={() => selectLayer("hero")}>
+              首頁主視覺
+            </button>
+          )}
+          {page === "work" &&
+            content.projects.map((item) => (
+              <button
+                key={item.id}
+                className="node-layer"
+                aria-label={`選取圖層：${item.title}`}
+                onClick={() => selectLayer(`project:${item.id}`)}
+              >
+                {item.title}
+              </button>
+            ))}
+          {page === "journal" &&
+            content.notes.map((item) => (
+              <button
+                key={item.id}
+                className="node-layer"
+                aria-label={`選取圖層：${item.title}`}
+                onClick={() => selectLayer(`note:${item.id}`)}
+              >
+                {item.title}
+              </button>
+            ))}
+          {page === "about" && (
+            <button className="node-layer" onClick={() => selectLayer("music")}>
+              音樂播放器
+            </button>
+          )}
+          <p className="layer-section-label">自訂圖層</p>
+          <LayerTree
+            content={content}
+            page={page}
+            selected={selection}
+            select={selectLayer}
+          />
+          <button
+            className="node-layer"
+            onClick={() => {
+              changeTab("layout");
+              setPanelOpen(true);
+            }}
+          >
+            ＋ 新增面板／佈局
+          </button>
           <div className="layers-help">
             <Icon name="edit" size={15} />
             <p>
@@ -824,44 +959,106 @@ function Editor({
       <div
         className="editor-canvas"
         ref={view}
-        onClickCapture={(event) => {
-          if ((event.target as Element).closest("[data-drag-handle]")) {
+        onAuxClickCapture={(event) => {
+          if (!preview) {
             event.preventDefault();
             event.stopPropagation();
-            return;
-          }
-          const pageLink = (event.target as Element).closest<HTMLElement>(
-            "[data-page-target]",
-          );
-          if (pageLink?.dataset.pageTarget) {
-            event.preventDefault();
-            event.stopPropagation();
-            setPage(pageLink.dataset.pageTarget as SitePage);
-            return;
-          }
-          if (preview) return;
-          const element = (event.target as Element).closest<HTMLElement>(
-            "[data-edit]",
-          );
-          if (element?.dataset.edit) {
-            event.preventDefault();
-            event.stopPropagation();
-            setSelection(element.dataset.edit as Selection);
-            changeTab("content");
-            setPanelOpen(true);
           }
         }}
+        onDragStart={(event) => event.preventDefault()}
+        onKeyDownCapture={(event) => {
+          if (
+            !preview &&
+            ["Enter", " "].includes(event.key) &&
+            !(event.target as Element).closest(
+              "[data-drag-handle],[data-free-move],[data-free-resize]",
+            )
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            const edit = (event.target as Element).closest<HTMLElement>(
+              "[data-edit]",
+            )?.dataset.edit;
+            if (edit) selectLayer(edit as Selection);
+          }
+        }}
+        onClickCapture={(event) => {
+          const target = event.target as Element;
+          if (preview) {
+            const link = target.closest<HTMLElement>("[data-page-target]");
+            if (link?.dataset.pageTarget) {
+              event.preventDefault();
+              event.stopPropagation();
+              changePage(link.dataset.pageTarget as SitePage);
+            }
+            return;
+          }
+          event.preventDefault();
+          event.stopPropagation();
+          if (
+            target.closest(
+              "[data-drag-handle],[data-free-move],[data-free-resize]",
+            )
+          )
+            return;
+          const edit = target.closest<HTMLElement>("[data-edit]")?.dataset.edit;
+          if (edit) selectLayer(edit as Selection);
+        }}
       >
-        <SiteRenderer
-          content={content}
-          api={api.base}
-          base={base}
-          editing={!preview}
-          selected={selection}
-          privateAssets={assets}
-          page={page}
-        />
+        <div
+          className={`canvas-stage ${snap ? "show-grid" : ""}`}
+          style={{ width: device === "auto" ? "100%" : `${device}px`, zoom }}
+        >
+          <SiteRenderer
+            content={content}
+            api={api.base}
+            base={base}
+            editing={!preview}
+            selected={selection}
+            privateAssets={assets}
+            page={page}
+          />
+        </div>
       </div>
+      {!preview && (
+        <div className="canvas-view-tools">
+          <label>
+            裝置
+            <select
+              aria-label="畫布裝置"
+              value={device}
+              onChange={(e) => setDevice(e.target.value)}
+            >
+              <option value="auto">適應視窗</option>
+              <option value="1440">桌面 1440</option>
+              <option value="768">平板 768</option>
+              <option value="390">手機 390</option>
+            </select>
+          </label>
+          <label>
+            縮放
+            <select
+              aria-label="畫布縮放"
+              value={zoom}
+              onChange={(e) => setZoom(Number(e.target.value))}
+            >
+              {[0.5, 0.75, 1, 1.25].map((value) => (
+                <option key={value} value={value}>
+                  {value * 100}%
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={snap}
+              onChange={(e) => setSnap(e.target.checked)}
+            />
+            8px 吸附
+          </label>
+        </div>
+      )}
       {!preview && (
         <div className="canvas-toolbar" role="toolbar" aria-label="畫布工具">
           <button
@@ -873,6 +1070,15 @@ function Editor({
             <span>圖層</span>
           </button>
           <i />
+          <button
+            aria-label="開啟佈局工具"
+            onClick={() => {
+              changeTab("layout");
+              setPanelOpen(true);
+            }}
+          >
+            面板／佈局
+          </button>
           <button
             aria-label="新增作品區塊"
             onClick={() => addCanvasBlock("project")}
@@ -913,7 +1119,9 @@ function Editor({
                       ? "交互設定"
                       : tab === "code"
                         ? "程式碼工作區"
-                        : "編輯內容"}
+                        : tab === "layout"
+                          ? "佈局與圖層"
+                          : "編輯內容"}
               </h2>
             </div>
             <button
@@ -931,6 +1139,7 @@ function Editor({
                 ["theme", "風格"],
                 ["media", "媒體"],
                 ["interactions", "互動"],
+                ["layout", "佈局"],
                 ["code", "代碼"],
               ] as const
             ).map(([value, label]) => (
@@ -1003,6 +1212,15 @@ function Editor({
                 )}
               </div>
             )}
+            {tab === "layout" && (
+              <WorkspacePanel
+                content={content}
+                page={page}
+                selection={selection}
+                select={selectLayer}
+                update={update}
+              />
+            )}
             {tab === "interactions" && (
               <InteractionsPanel content={content} update={update} />
             )}
@@ -1026,6 +1244,7 @@ function Editor({
             {tab === "content" && (
               <ContentPanel
                 content={content}
+                page={page}
                 selection={selection}
                 setSelection={(value) => {
                   setSelection(value);
@@ -1119,6 +1338,18 @@ function Editor({
               </>
             )}
             <div className="history-block">
+              {tab !== "code" && (
+                <ScopedCode
+                  key={`${tab}:${page}`}
+                  content={content}
+                  scope={tab}
+                  page={page}
+                  apply={replaceContent}
+                  onDirty={(dirty) => {
+                    codeDirty.current = dirty;
+                  }}
+                />
+              )}
               <button
                 className="history-toggle"
                 onClick={() => setHistoryOpen((p) => !p)}

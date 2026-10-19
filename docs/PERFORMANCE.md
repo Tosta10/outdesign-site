@@ -10,10 +10,10 @@
 | Accessibility       | 100                    |
 | Best Practices      | 100                    |
 | SEO                 | 100                    |
-| LCP                 | 約 1.81 秒             |
+| LCP                 | 約 1.80 秒             |
 | CLS                 | 0                      |
 | Total Blocking Time | 0 ms                   |
-| 訪客初始 JavaScript | 約 2.83 KB gzip 計算值 |
+| 訪客初始 JavaScript | 約 2.84 KB gzip 計算值 |
 
 這是本機實驗室結果，包含原創示範素材；不代表所有裝置、網路、後續上傳素材與正式網域均會取得相同成績。gzip 數值由產物計算，實際傳輸壓縮依託管服務而定。INP 必須在上線後用真實互動與流量評估，不能用 TBT 代替。
 
@@ -41,7 +41,7 @@ Linux／CI 請先 `pnpm exec playwright install --with-deps chromium`。Windows 
 
 ## 功能與安全驗證
 
-- 18 項 Node／PostgreSQL 測試通過：兩組密碼、錯誤登入、工作階段、登出、輪替、草稿隔離、版本衝突、素材保護、限流、URL／schema 驗證，以及正式 migration 的 RLS／原子發布程序。
+- 22 項 Node／PostgreSQL 測試通過：兩組密碼、錯誤登入、工作階段、登出、輪替、草稿隔離、版本衝突、素材保護、限流、URL／schema 驗證，以及正式 migration 的 RLS／原子發布程序。
 - PostgreSQL 使用 PGlite 執行真實 migration SQL，重建 Supabase roles 與 bucket metadata 以驗證授權；這不取代正式 Supabase 服務整合測試。
 - `astro check` 與正式 Edge Function 的 `deno check` 通過。
 - Playwright 測試 320／390／768／1024／1440px，未發現水平溢出。
@@ -53,3 +53,5 @@ Linux／CI 請先 `pnpm exec playwright install --with-deps chromium`。Windows 
 目前 GitHub Pages 與 Supabase 已連線。正式 API 已驗證雙密碼登入、新版 layout 順序與 interactions／design 設定儲存／讀取，測試後已還原原有草稿。既有版本亦已驗證私人附件 401、作者讀取與自動發布成功。自訂網域仍需同步調整 CORS。
 
 60fps 為互動目標；高更新率裝置、低階手機與使用者後續上傳的素材仍需實機 profiling，不承諾所有硬體固定幀率。
+
+新版工作區整合驗證包含：編輯／預覽事件隔離、頁面屬性同步、巢狀面板、自由拖曳與縮放、鎖定／隱藏、子樹複製／刪除、網格切換、各面板程式碼、裝置畫布與畫布圖片的原子發布。拖曳與縮放的暫存畫面使用 transform，只有放下時寫入尺寸／座標。

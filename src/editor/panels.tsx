@@ -1,3 +1,8 @@
+import {
+  defaultDesign,
+  verdantDesign,
+} from "../../supabase/functions/_shared/schema";
+import type { SitePage } from "../components/SiteRenderer";
 import { useId } from "react";
 import type {
   Selection,
@@ -80,7 +85,9 @@ export function ContentPanel({
   setSelection,
   update,
   openMedia,
+  page,
 }: {
+  page: SitePage;
   content: SiteContent;
   selection: Selection;
   setSelection: (v: Selection) => void;
@@ -95,33 +102,9 @@ export function ContentPanel({
     : null;
   return (
     <>
-      <label className="editor-field">
-        <span>編輯區塊</span>
-        <select
-          value={selection}
-          onChange={(e) => setSelection(e.target.value as Selection)}
-        >
-          <option value="hero">首頁主視覺</option>
-          <optgroup label="作品">
-            {c.projects.map((p) => (
-              <option key={p.id} value={`project:${p.id}`}>
-                {p.title}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="筆記">
-            {c.notes.map((n) => (
-              <option key={n.id} value={`note:${n.id}`}>
-                {n.title}
-              </option>
-            ))}
-          </optgroup>
-          <option value="about">關於我</option>
-          <option value="music">音樂播放器</option>
-          <option value="contact">聯絡資訊</option>
-        </select>
-      </label>
-      <p className="panel-help">也可以直接點選左側頁面的區塊來編輯。</p>
+      <p className="panel-help">
+        從左側圖層或畫布選取內容，屬性會在此同步顯示。
+      </p>
       {selection === "hero" && (
         <>
           <Heading>首頁主視覺</Heading>
@@ -485,223 +468,235 @@ export function ContentPanel({
           </button>
         </>
       )}
-      <Heading>作品管理</Heading>
-      <div className="block-list">
-        {c.projects.map((p, i) => (
-          <div
-            key={p.id}
-            className={selection === `project:${p.id}` ? "selected" : ""}
-          >
-            <button
-              className="block-label"
-              onClick={() => setSelection(`project:${p.id}`)}
-            >
-              <span>{String(i + 1).padStart(2, "0")}</span>
-              {p.title}
-            </button>
-            <button
-              className="icon-button"
-              aria-label={`上移 ${p.title}`}
-              disabled={i === 0}
-              onClick={() =>
-                update((n) => {
-                  [n.projects[i - 1], n.projects[i]] = [
-                    n.projects[i],
-                    n.projects[i - 1],
-                  ];
-                })
-              }
-            >
-              <Icon name="up" size={14} />
-            </button>
-            <button
-              className="icon-button"
-              aria-label={`下移 ${p.title}`}
-              disabled={i === c.projects.length - 1}
-              onClick={() =>
-                update((n) => {
-                  [n.projects[i + 1], n.projects[i]] = [
-                    n.projects[i],
-                    n.projects[i + 1],
-                  ];
-                })
-              }
-            >
-              <Icon name="down" size={14} />
-            </button>
-            <button
-              className="icon-button"
-              aria-label={`移除作品 ${p.title}`}
-              onClick={() => {
-                update((n) => {
-                  n.projects = n.projects.filter((x) => x.id !== p.id);
-                });
-                if (selection === `project:${p.id}`) setSelection("hero");
-              }}
-            >
-              <Icon name="trash" size={13} />
-            </button>
+      {page === "work" && (
+        <>
+          <Heading>作品管理</Heading>
+          <div className="block-list">
+            {c.projects.map((p, i) => (
+              <div
+                key={p.id}
+                className={selection === `project:${p.id}` ? "selected" : ""}
+              >
+                <button
+                  className="block-label"
+                  onClick={() => setSelection(`project:${p.id}`)}
+                >
+                  <span>{String(i + 1).padStart(2, "0")}</span>
+                  {p.title}
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label={`上移 ${p.title}`}
+                  disabled={i === 0}
+                  onClick={() =>
+                    update((n) => {
+                      [n.projects[i - 1], n.projects[i]] = [
+                        n.projects[i],
+                        n.projects[i - 1],
+                      ];
+                    })
+                  }
+                >
+                  <Icon name="up" size={14} />
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label={`下移 ${p.title}`}
+                  disabled={i === c.projects.length - 1}
+                  onClick={() =>
+                    update((n) => {
+                      [n.projects[i + 1], n.projects[i]] = [
+                        n.projects[i],
+                        n.projects[i + 1],
+                      ];
+                    })
+                  }
+                >
+                  <Icon name="down" size={14} />
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label={`移除作品 ${p.title}`}
+                  onClick={() => {
+                    update((n) => {
+                      n.projects = n.projects.filter((x) => x.id !== p.id);
+                    });
+                    if (selection === `project:${p.id}`) setSelection("hero");
+                  }}
+                >
+                  <Icon name="trash" size={13} />
+                </button>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <button
-        className="panel-secondary"
-        disabled={c.projects.length >= 24}
-        onClick={() => {
-          const id = crypto.randomUUID();
-          update((n) => {
-            n.projects.push({
-              id,
-              title: "新的作品",
-              category: "設計",
-              description: "在這裡介紹你的作品。",
-              year: new Date().getUTCFullYear().toString(),
-              image: "/assets/work-quiet.svg",
-              alt: "作品封面",
-              url: "",
-              tone: "lilac",
-              demo: false,
-            });
-          });
-          setSelection(`project:${id}`);
-        }}
-      >
-        <Icon name="plus" size={15} />
-        新增作品
-      </button>
-      <Heading>筆記管理</Heading>
-      <Switch
-        label="顯示筆記區塊"
-        checked={c.settings.showNotes}
-        onChange={(v) =>
-          update((n) => {
-            n.settings.showNotes = v;
-          })
-        }
-      />
-      <div className="block-list">
-        {c.notes.map((n) => (
-          <div key={n.id}>
-            <button
-              className="block-label"
-              onClick={() => setSelection(`note:${n.id}`)}
-            >
-              {n.title}
-            </button>
-            <button
-              className="icon-button"
-              aria-label={`移除筆記 ${n.title}`}
-              onClick={() => {
-                update((next) => {
-                  next.notes = next.notes.filter((x) => x.id !== n.id);
-                });
-                if (selection === `note:${n.id}`) setSelection("hero");
-              }}
-            >
-              <Icon name="trash" size={13} />
-            </button>
-          </div>
-        ))}
-      </div>
-      <button
-        className="panel-secondary"
-        disabled={c.notes.length >= 30}
-        onClick={() => {
-          const id = crypto.randomUUID();
-          update((n) => {
-            n.notes.push({
-              id,
-              title: "新的筆記",
-              excerpt: "寫下你現在的想法。",
-              date: new Intl.DateTimeFormat("zh-TW", {
-                timeZone: "Asia/Taipei",
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-              })
-                .format(new Date())
-                .replaceAll("/", "."),
-              tag: "隨筆",
-              url: "",
-            });
-          });
-          setSelection(`note:${id}`);
-        }}
-      >
-        <Icon name="plus" size={15} />
-        新增筆記
-      </button>
-      <Heading>附件與下載連結</Heading>
-      {c.attachments.map((a) => (
-        <div className="attachment-editor" key={a.id}>
-          <Field
-            label="附件名稱"
-            value={a.name}
-            max={100}
-            onChange={(v) =>
-              update((n) => {
-                n.attachments.find((x) => x.id === a.id)!.name = v;
-              })
-            }
-          />
-          <Field
-            label="檔案或外部網址"
-            value={a.url}
-            max={2048}
-            onChange={(v) =>
-              update((n) => {
-                n.attachments.find((x) => x.id === a.id)!.url = v;
-              })
-            }
-          />
-          <Field
-            label="下載資訊"
-            value={a.label}
-            max={30}
-            onChange={(v) =>
-              update((n) => {
-                n.attachments.find((x) => x.id === a.id)!.label = v;
-              })
-            }
-          />
           <button
-            className="panel-danger"
+            className="panel-secondary"
+            disabled={c.projects.length >= 24}
+            onClick={() => {
+              const id = crypto.randomUUID();
+              update((n) => {
+                n.projects.push({
+                  id,
+                  title: "新的作品",
+                  category: "設計",
+                  description: "在這裡介紹你的作品。",
+                  year: new Date().getUTCFullYear().toString(),
+                  image: "/assets/work-quiet.svg",
+                  alt: "作品封面",
+                  url: "",
+                  tone: "lilac",
+                  demo: false,
+                });
+              });
+              setSelection(`project:${id}`);
+            }}
+          >
+            <Icon name="plus" size={15} />
+            新增作品
+          </button>
+        </>
+      )}
+      {page === "journal" && (
+        <>
+          <Heading>筆記管理</Heading>
+          <Switch
+            label="顯示筆記區塊"
+            checked={c.settings.showNotes}
+            onChange={(v) =>
+              update((n) => {
+                n.settings.showNotes = v;
+              })
+            }
+          />
+          <div className="block-list">
+            {c.notes.map((n) => (
+              <div key={n.id}>
+                <button
+                  className="block-label"
+                  onClick={() => setSelection(`note:${n.id}`)}
+                >
+                  {n.title}
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label={`移除筆記 ${n.title}`}
+                  onClick={() => {
+                    update((next) => {
+                      next.notes = next.notes.filter((x) => x.id !== n.id);
+                    });
+                    if (selection === `note:${n.id}`) setSelection("hero");
+                  }}
+                >
+                  <Icon name="trash" size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            className="panel-secondary"
+            disabled={c.notes.length >= 30}
+            onClick={() => {
+              const id = crypto.randomUUID();
+              update((n) => {
+                n.notes.push({
+                  id,
+                  title: "新的筆記",
+                  excerpt: "寫下你現在的想法。",
+                  date: new Intl.DateTimeFormat("zh-TW", {
+                    timeZone: "Asia/Taipei",
+                    year: "numeric",
+                    month: "2-digit",
+                    day: "2-digit",
+                  })
+                    .format(new Date())
+                    .replaceAll("/", "."),
+                  tag: "隨筆",
+                  url: "",
+                });
+              });
+              setSelection(`note:${id}`);
+            }}
+          >
+            <Icon name="plus" size={15} />
+            新增筆記
+          </button>
+        </>
+      )}
+      {page === "resources" && (
+        <>
+          <Heading>附件與下載連結</Heading>
+          {c.attachments.map((a) => (
+            <div className="attachment-editor" key={a.id}>
+              <Field
+                label="附件名稱"
+                value={a.name}
+                max={100}
+                onChange={(v) =>
+                  update((n) => {
+                    n.attachments.find((x) => x.id === a.id)!.name = v;
+                  })
+                }
+              />
+              <Field
+                label="檔案或外部網址"
+                value={a.url}
+                max={2048}
+                onChange={(v) =>
+                  update((n) => {
+                    n.attachments.find((x) => x.id === a.id)!.url = v;
+                  })
+                }
+              />
+              <Field
+                label="下載資訊"
+                value={a.label}
+                max={30}
+                onChange={(v) =>
+                  update((n) => {
+                    n.attachments.find((x) => x.id === a.id)!.label = v;
+                  })
+                }
+              />
+              <button
+                className="panel-danger"
+                onClick={() =>
+                  update((n) => {
+                    n.attachments = n.attachments.filter((x) => x.id !== a.id);
+                  })
+                }
+              >
+                <Icon name="trash" size={13} />
+                移除附件連結
+              </button>
+            </div>
+          ))}
+          <button
+            className="panel-secondary"
+            disabled={c.attachments.length >= 20}
+            onClick={openMedia}
+          >
+            <Icon name="upload" size={15} />
+            上傳附件
+          </button>
+          <button
+            className="panel-secondary"
+            disabled={c.attachments.length >= 20}
             onClick={() =>
               update((n) => {
-                n.attachments = n.attachments.filter((x) => x.id !== a.id);
+                n.attachments.push({
+                  id: crypto.randomUUID(),
+                  name: "新的連結",
+                  url: "",
+                  label: "外部資源",
+                });
               })
             }
           >
-            <Icon name="trash" size={13} />
-            移除附件連結
+            <Icon name="plus" size={15} />
+            新增外部連結
           </button>
-        </div>
-      ))}
-      <button
-        className="panel-secondary"
-        disabled={c.attachments.length >= 20}
-        onClick={openMedia}
-      >
-        <Icon name="upload" size={15} />
-        上傳附件
-      </button>
-      <button
-        className="panel-secondary"
-        disabled={c.attachments.length >= 20}
-        onClick={() =>
-          update((n) => {
-            n.attachments.push({
-              id: crypto.randomUUID(),
-              name: "新的連結",
-              url: "",
-              label: "外部資源",
-            });
-          })
-        }
-      >
-        <Icon name="plus" size={15} />
-        新增外部連結
-      </button>
+        </>
+      )}
     </>
   );
 }
@@ -720,17 +715,16 @@ export function ThemePanel({
   return (
     <>
       <p className="panel-help">
-        三種視覺組合共用排版與內容；切換後立即預覽，發布後才會對訪客生效。
+        兩種視覺組合共用排版與內容；切換後立即預覽，發布後才會對訪客生效。
       </p>
       <div className="theme-options">
         {(
           [
             { value: "prism", name: "Prism", desc: "深黑底色，少量虹彩引導" },
-            { value: "quiet", name: "Quiet", desc: "純粹黑白，讓作品成為焦點" },
             {
-              value: "luminous",
-              name: "Luminous",
-              desc: "柔光與較鮮明的虹色細節",
+              value: "verdant",
+              name: "Verdant 墨綠",
+              desc: "墨綠石墨與霧銀綠，統一的自然色階",
             },
           ] as const
         ).map((t) => (
@@ -741,6 +735,9 @@ export function ThemePanel({
             onClick={() =>
               update((n) => {
                 n.settings.theme = t.value;
+                n.design = {
+                  ...(t.value === "verdant" ? verdantDesign : defaultDesign),
+                };
               })
             }
           >

@@ -94,6 +94,98 @@ export const defaultDesign: z.infer<typeof designSchema> = {
   width: 1280,
   radius: 12,
 };
+export const verdantDesign: z.infer<typeof designSchema> = {
+  ...defaultDesign,
+  background: "#080f0d",
+  surface: "#111d18",
+  raised: "#1b2b23",
+  text: "#e8f0e9",
+  muted: "#a1b5a8",
+  accent: "#91c4a5",
+};
+export const canvasPage = z.enum([
+  "home",
+  "work",
+  "journal",
+  "about",
+  "resources",
+]);
+export const canvasNodeSchema = z
+  .object({
+    id: z.uuid(),
+    page: canvasPage,
+    parent: z.uuid().nullable(),
+    type: z.enum(["frame", "text", "image", "link", "divider"]),
+    name: text(60).min(1),
+    body: text(4000),
+    url: externalUrl,
+    image: mediaUrl,
+    alt: text(160),
+    layout: z.enum(["vertical", "horizontal", "grid", "free"]),
+    x: z.number().min(0).max(100),
+    y: z.number().min(0).max(3000),
+    width: z.number().min(80).max(1600),
+    height: z.number().min(40).max(2000),
+    sizing: z.enum(["fill", "fixed", "hug"]),
+    gap: z.number().min(0).max(120),
+    padding: z.number().min(0).max(120),
+    columns: z.number().int().min(1).max(6),
+    align: z.enum(["start", "center", "end"]),
+    fill: z.enum(["none", "surface", "raised", "accent"]),
+    border: z.boolean(),
+    radius: z.number().min(0).max(40),
+    fontSize: z.number().min(12).max(96),
+    opacity: z.number().min(0.1).max(1),
+    hidden: z.boolean(),
+    locked: z.boolean(),
+  })
+  .strict();
+export type CanvasNode = z.infer<typeof canvasNodeSchema>;
+export const workspaceSchema = z
+  .object({
+    nodes: z.array(canvasNodeSchema).max(100),
+    pages: z
+      .record(
+        canvasPage,
+        z
+          .object({
+            gap: z.number().min(0).max(160),
+            padding: z.number().min(0).max(160),
+            builtins: z.boolean(),
+            position: z.enum(["before", "after"]),
+          })
+          .strict(),
+      )
+      .optional(),
+  })
+  .strict()
+  .superRefine((workspace, ctx) => {
+    const nodes = new Map(workspace.nodes.map((node) => [node.id, node]));
+    if (nodes.size !== workspace.nodes.length)
+      ctx.addIssue({ code: "custom", message: "圖層 ID 不可重複" });
+    for (const node of workspace.nodes) {
+      let parent = node.parent;
+      const seen = new Set([node.id]);
+      while (parent) {
+        const frame = nodes.get(parent);
+        if (
+          !frame ||
+          frame.type !== "frame" ||
+          frame.page !== node.page ||
+          seen.has(parent) ||
+          seen.size > 6
+        ) {
+          ctx.addIssue({
+            code: "custom",
+            message: "圖層需位於同頁的有效面板中，不可循環或超過六層",
+          });
+          break;
+        }
+        seen.add(parent);
+        parent = frame.parent;
+      }
+    }
+  });
 export const contentSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -102,7 +194,11 @@ export const contentSchema = z
         name: text(60).min(1),
         siteTitle: text(100).min(1),
         description: text(220),
-        theme: z.enum(["prism", "quiet", "luminous"]),
+        theme: z.preprocess(
+          (value) =>
+            value === "quiet" || value === "luminous" ? "prism" : value,
+          z.enum(["prism", "verdant"]),
+        ),
         showNotes: z.boolean(),
         showMusic: z.boolean(),
       })
@@ -140,6 +236,7 @@ export const contentSchema = z
     attachments: z.array(attachmentSchema).max(20),
     interactions: interactionSchema.optional(),
     design: designSchema.optional(),
+    workspace: workspaceSchema.optional(),
     layout: z
       .object({
         sections: z
@@ -159,6 +256,10 @@ export type Selection =
   | "contact"
   | "settings"
   | "music"
+  | "projects"
+  | "notes"
+  | "attachments"
+  | `node:${string}`
   | `project:${string}`
   | `note:${string}`;
 export const credentialsSchema = z
@@ -175,6 +276,7 @@ export function collectAssetIds(content: SiteContent): string[] {
         content.music.url,
         ...content.projects.map((p) => p.image),
         ...content.attachments.map((a) => a.url),
+        ...(content.workspace?.nodes.map((node) => node.image) || []),
       ]
         .filter((v) => v.startsWith("asset:"))
         .map((v) => v.slice(6)),

@@ -83,6 +83,10 @@ try {
     reducedMotion: "reduce",
   });
   const page = await context.newPage();
+  page.on("dialog", async (dialog) => {
+    console.log("Browser dialog:", dialog.type(), dialog.message());
+    await dialog.dismiss();
+  });
   const errors = [],
     requests = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -236,8 +240,32 @@ try {
   const before = await (await fetch(api.url + "/api/public")).json();
   assert.equal(before.content.hero.line1, "把想法，");
   await page.getByRole("tab", { name: "風格" }).click();
-  await page.locator(".theme-option.quiet").click();
-  await page.locator(".editor-canvas .theme-quiet").waitFor();
+  await page.locator(".theme-option.verdant").click();
+  await page.locator(".editor-canvas .theme-verdant").waitFor();
+  async function applyScopedCode(mutate) {
+    await page.getByRole("button", { name: /^此面板的程式碼/ }).click();
+    const editor = page.getByLabel("面板程式碼", { exact: true });
+    const value = JSON.parse(await editor.inputValue());
+    mutate(value);
+    await editor.fill(JSON.stringify(value, null, 2));
+    await page
+      .getByRole("button", { name: "套用面板代碼", exact: true })
+      .click();
+    await page.getByText("已驗證並套用，可復原。", { exact: true }).waitFor();
+    return value;
+  }
+  await applyScopedCode((value) => {
+    assert.equal(value.theme, "verdant");
+    value.design.accent = "#a7c8ae";
+  });
+  assert.equal(
+    await page
+      .locator(".editor-canvas .site")
+      .evaluate((el) => el.style.getPropertyValue("--color-accent")),
+    "#a7c8ae",
+  );
+  await page.getByRole("button", { name: "復原上一步", exact: true }).click();
+
   await page.getByLabel("預覽頁面", { exact: true }).selectOption("about");
   await page
     .getByRole("button", { name: "拖曳排序：關於", exact: true })
@@ -283,6 +311,14 @@ try {
       "requestAnimationFrame",
     ),
   );
+  await applyScopedCode((value) => {
+    value.ripple = false;
+  });
+  assert.equal(
+    await page.getByLabel("點擊擴散回饋", { exact: true }).isChecked(),
+    false,
+  );
+  await page.getByRole("button", { name: "復原上一步", exact: true }).click();
   await page.getByRole("tab", { name: "代碼", exact: true }).click();
   const code = page.getByLabel("網站程式碼", { exact: true });
   const baseline = await code.inputValue();
@@ -324,6 +360,159 @@ try {
   );
   await page.getByRole("button", { name: "復原上一步", exact: true }).click();
   await page.getByRole("tab", { name: "內容" }).click();
+  await page.getByLabel("預覽頁面", { exact: true }).selectOption("work");
+  assert.equal(await page.getByText("編輯區塊", { exact: true }).count(), 0);
+  await applyScopedCode((value) => {
+    assert.ok(Array.isArray(value.projects));
+  });
+  assert.equal(
+    await page.getByLabel("作品名稱", { exact: true }).inputValue(),
+    "Quiet Interfaces",
+  );
+  await page.locator(".editor-canvas .work-image-button").first().click();
+  assert.equal(
+    await page.locator(".editor-canvas .detail-dialog[open]").count(),
+    0,
+  );
+  await page
+    .locator(".editor-canvas .work-image-button")
+    .first()
+    .press("Enter");
+  assert.equal(
+    await page.locator(".editor-canvas .detail-dialog[open]").count(),
+    0,
+  );
+  await page.getByRole("button", { name: "預覽", exact: true }).click();
+  await page.locator(".editor-canvas .work-image-button").first().click();
+  await page.locator(".editor-canvas .detail-dialog[open]").waitFor();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "繼續編輯", exact: true }).click();
+  await page.getByLabel("預覽頁面", { exact: true }).selectOption("journal");
+  await page.locator(".editor-canvas .note-item summary").first().click();
+  assert.equal(
+    await page.locator(".editor-canvas .note-item[open]").count(),
+    0,
+  );
+  await page.getByLabel("預覽頁面", { exact: true }).selectOption("about");
+  await page.locator(".editor-canvas [data-audio-toggle]").click();
+  assert.equal(
+    await page.locator(".editor-canvas audio").evaluate((el) => el.paused),
+    true,
+  );
+  await page.locator(".editor-canvas [data-audio-toggle]").press("Space");
+  assert.equal(
+    await page.locator(".editor-canvas audio").evaluate((el) => el.paused),
+    true,
+  );
+  await page.getByLabel("預覽頁面", { exact: true }).selectOption("home");
+  await page.locator(".editor-canvas [data-menu-toggle]").click();
+  assert.equal(
+    await page.locator(".editor-canvas .nav-drawer[open]").count(),
+    0,
+  );
+  await page.locator(".editor-canvas .hero-explore").click();
+  assert.equal(await page.locator(".editor-canvas .page-home").count(), 1);
+  await page.getByRole("tab", { name: "佈局", exact: true }).click();
+  await page.getByRole("button", { name: "新增面板", exact: true }).click();
+  await page.getByLabel("圖層名稱", { exact: true }).fill("自由面板");
+  await page.getByLabel("排版模式", { exact: true }).selectOption("free");
+  await page.getByRole("button", { name: "新增文字", exact: true }).click();
+  await page.getByLabel("圖層名稱", { exact: true }).fill("文字 A");
+  await page.getByLabel("圖層文字", { exact: true }).fill("自由排版內容");
+  const freeMove = page.getByRole("button", {
+    name: "移動圖層：文字 A",
+    exact: true,
+  });
+  await freeMove.scrollIntoViewIfNeeded();
+  const beforeX = Number(
+    await page.getByLabel("X 位置 %", { exact: true }).inputValue(),
+  );
+  const moveBox = await freeMove.boundingBox();
+  await page.mouse.move(moveBox.x + 20, moveBox.y + 8);
+  await page.mouse.down();
+  await page.mouse.move(moveBox.x + 68, moveBox.y + 40, { steps: 8 });
+  await page.mouse.up();
+  assert.ok(
+    Number(await page.getByLabel("X 位置 %", { exact: true }).inputValue()) >
+      beforeX,
+  );
+  const widthBefore = Number(
+    await page.getByLabel("寬度 px", { exact: true }).inputValue(),
+  );
+  await page
+    .getByRole("button", { name: "調整尺寸：文字 A", exact: true })
+    .scrollIntoViewIfNeeded();
+  const resizeBox = await page
+    .getByRole("button", { name: "調整尺寸：文字 A", exact: true })
+    .boundingBox();
+  await page.mouse.move(resizeBox.x + 6, resizeBox.y + 6);
+  await page.mouse.down();
+  await page.mouse.move(resizeBox.x + 46, resizeBox.y + 30, { steps: 8 });
+  await page.mouse.up();
+  assert.ok(
+    Number(await page.getByLabel("寬度 px", { exact: true }).inputValue()) >
+      widthBefore,
+  );
+  await page.getByRole("button", { name: "復原上一步", exact: true }).click();
+  assert.equal(
+    Number(await page.getByLabel("寬度 px", { exact: true }).inputValue()),
+    widthBefore,
+  );
+  await page.getByLabel("鎖定圖層", { exact: true }).check();
+  assert.equal(await freeMove.count(), 0);
+  await page.getByLabel("鎖定圖層", { exact: true }).uncheck();
+  await page.getByLabel("隱藏圖層", { exact: true }).check();
+  assert.equal(
+    await page.locator(".editor-canvas .node-text:visible").count(),
+    0,
+  );
+  await page.getByLabel("隱藏圖層", { exact: true }).uncheck();
+  await page
+    .getByRole("button", { name: "選取圖層：自由面板", exact: true })
+    .click();
+  await page.getByRole("button", { name: "複製圖層", exact: true }).click();
+  assert.equal(await page.locator(".editor-canvas .canvas-node").count(), 4);
+  await page
+    .getByRole("button", { name: "刪除圖層與子層", exact: true })
+    .click();
+  assert.equal(await page.locator(".editor-canvas .canvas-node").count(), 2);
+  await page
+    .getByRole("button", { name: "選取圖層：自由面板", exact: true })
+    .click();
+  await page.getByLabel("排版模式", { exact: true }).selectOption("grid");
+  assert.equal(
+    await page
+      .locator(".editor-canvas .node-frame")
+      .evaluate((el) => getComputedStyle(el).display),
+    "grid",
+  );
+  await page.getByLabel("排版模式", { exact: true }).selectOption("free");
+  await page.getByRole("button", { name: /^此面板的程式碼/ }).click();
+  const scopedEditor = page.getByLabel("面板程式碼", { exact: true });
+  const workspaceCode = JSON.parse(await scopedEditor.inputValue());
+  workspaceCode.nodes[0].gap = 40;
+  await scopedEditor.fill(JSON.stringify(workspaceCode, null, 2));
+  await page.getByRole("button", { name: "套用面板代碼", exact: true }).click();
+  assert.equal(
+    await page.getByLabel("圖層間距", { exact: true }).inputValue(),
+    "40",
+  );
+  await page.getByLabel("畫布裝置", { exact: true }).selectOption("390");
+  await page.getByLabel("畫布縮放", { exact: true }).selectOption("0.75");
+  assert.equal(
+    await page
+      .locator(".editor-canvas .node-free")
+      .evaluate((el) => getComputedStyle(el).position),
+    "relative",
+  );
+  await page.screenshot({ path: "artifacts/workspace-mobile-frame.png" });
+  await page.getByLabel("畫布裝置", { exact: true }).selectOption("auto");
+  await page.getByLabel("畫布縮放", { exact: true }).selectOption("1");
+  await page.screenshot({ path: "artifacts/workspace-free-layout.png" });
+  await page.getByLabel("預覽頁面", { exact: true }).selectOption("work");
+  console.log(
+    "Workspace verified: edit isolation, preview, auto selection, nested frames, free drag/resize, locks, scoped code and device layout.",
+  );
   await page.getByRole("button", { name: "新增作品", exact: true }).click();
   await page.getByLabel("作品名稱", { exact: true }).fill("OutDesign Lab");
   await page
@@ -362,6 +551,7 @@ try {
   await page.getByLabel("預覽頁面", { exact: true }).selectOption("journal");
   await page.locator(".editor-canvas .page-journal").waitFor();
   await page.getByLabel("預覽頁面", { exact: true }).selectOption("home");
+  await page.getByLabel("預覽頁面", { exact: true }).selectOption("work");
   await page.getByRole("tab", { name: "媒體" }).click();
   await page.getByLabel("上傳素材", { exact: true }).setInputFiles({
     name: "study.png",
@@ -398,6 +588,11 @@ try {
     .getByRole("button", { name: "套用", exact: true })
     .click();
   await page.getByText("所有修改已儲存", { exact: true }).waitFor();
+  await page.getByRole("tab", { name: "媒體", exact: true }).click();
+  await applyScopedCode((value) => {
+    assert.ok(Array.isArray(value.projectImages));
+    assert.ok(Array.isArray(value.canvasImages));
+  });
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(
     await page
@@ -407,6 +602,7 @@ try {
   );
   await page.screenshot({ path: "artifacts/editor-mobile.png" });
   await page.getByRole("button", { name: "關閉編輯面板", exact: true }).click();
+  await page.getByLabel("預覽頁面", { exact: true }).selectOption("home");
   await page
     .locator('.editor-canvas [data-edit="hero"]')
     .click({ position: { x: 60, y: 120 } });
@@ -423,11 +619,13 @@ try {
     .waitFor();
   const after = await (await fetch(api.url + "/api/public")).json();
   assert.equal(after.content.hero.line1, "讓創意，有方向。");
-  assert.equal(after.content.settings.theme, "quiet");
+  assert.equal(after.content.settings.theme, "verdant");
   assert.equal(after.content.projects.length, 4);
   assert.equal(after.content.interactions.card, "lift");
   assert.equal(after.content.interactions.transition, "slide");
   assert.equal(after.content.attachments.length, 1);
+  assert.equal(after.content.workspace.nodes.length, 2);
+  assert.equal(after.content.workspace.nodes[0].gap, 40);
   assert.equal(
     after.content.layout.sections.filter((key) =>
       ["about", "contact"].includes(key),
@@ -441,6 +639,7 @@ try {
   assert.equal((await fetch(api.url + "/api/media/" + imageAsset)).status, 200);
   await page.getByRole("button", { name: "發布歷史" }).click();
   await page.getByRole("button", { name: "載入草稿", exact: true }).click();
+  await page.getByText("所有修改已儲存", { exact: true }).waitFor();
   // Publishing locally reloads the public page after the asynchronous logout.
   // Wait for that navigation before interacting with the next login dialog.
   await Promise.all([
@@ -488,7 +687,10 @@ try {
       "hero CTA and featured card stay separated on wide/short screens",
       "canvas keyboard section reordering and undo",
       "long-press pointer project reordering",
-      "editor page switching",
+      "editor page switching and automatic page properties",
+      "visitor interactions blocked while editing and restored in preview",
+      "nested frames, free drag/resize, grid layout, lock/hide, duplicate and delete",
+      "scoped panel code and responsive device canvas",
       "pointer tilt settling and reduced-motion fallback",
       "interaction configuration and source inspection",
       "invalid JSON rejection, bulk edit, typed CSS preview and undo",

@@ -105,18 +105,26 @@
     min-height: 100vh;
     background: var(--color-bg);
   }
-  .theme-quiet {
-    --color-accent: #dededb;
-    --gradient-prism: linear-gradient(120deg, #8b8b8b, #eee, #a6a6a6);
-  }
-  .theme-luminous {
+  .theme-verdant {
+    --color-bg: #080f0d;
+    --color-surface: #111d18;
+    --color-raised: #1b2b23;
+    --color-text: #e8f0e9;
+    --color-muted: #a1b5a8;
+    --color-accent: #91c4a5;
     --gradient-prism: linear-gradient(
       120deg,
-      #d6adee,
-      #c4ecf1 40%,
-      #f2e6c2 70%,
-      #ecc8df
+      #9fc4a4,
+      #c9dfbf 42%,
+      #769c96 74%,
+      #b7caa5
     );
+  }
+  .theme-verdant .glass-surface {
+    background: linear-gradient(145deg, #bfd8c50a, #111d188c 50%, #111d18b3);
+  }
+  .theme-verdant .hero h1 {
+    color: var(--color-text);
   }
   .preserve-lines {
     white-space: pre-line;
@@ -299,7 +307,7 @@
   .hero h1 {
     font-family: var(--font-serif);
     font-weight: 400;
-    font-size: clamp(50px, 4.8vw, 78px);
+    font-size: clamp(50px, 4.8cqw, 78px);
     line-height: 1.27;
     letter-spacing: -2px;
     color: #f5f4ed;
@@ -1217,7 +1225,7 @@
   }
 }
 @layer responsive {
-  @media (min-width: 1650px) {
+  @container site (min-width: 1650px) {
     .hero-copy {
       padding-top: 15px;
     }
@@ -1238,7 +1246,7 @@
       bottom: auto;
     }
   }
-  @media (max-width: 1100px) {
+  @container site (max-width: 1100px) {
     .section-shell {
       width: calc(100% - 100px);
     }
@@ -1309,7 +1317,7 @@
       font-size: 28px;
     }
   }
-  @media (max-width: 760px) {
+  @container site (max-width: 760px) {
     .hero-frame {
       width: calc(100% - 24px);
       margin-top: 12px;
@@ -1364,7 +1372,7 @@
       margin-bottom: 24px;
     }
     .hero h1 {
-      font-size: clamp(44px, 9vw, 66px);
+      font-size: clamp(44px, 9cqw, 66px);
       line-height: 1.4;
       letter-spacing: 0;
     }
@@ -1572,7 +1580,7 @@
       bottom: 23px;
     }
   }
-  @media (max-width: 450px) {
+  @container site (max-width: 450px) {
     .hero {
       padding-inline: 23px;
     }
@@ -1630,7 +1638,7 @@
       font-size: 30px;
     }
   }
-  @media (max-width: 360px) {
+  @container site (max-width: 360px) {
     .hero h1 {
       font-size: 42px;
     }

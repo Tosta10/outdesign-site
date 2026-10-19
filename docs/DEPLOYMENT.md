@@ -10,7 +10,10 @@
 
 在 Supabase 建立專案，於 SQL Editor 執行完整檔案：
 
-`supabase/migrations/202610190001_studio.sql`
+1. `supabase/migrations/202610190001_studio.sql`
+2. `supabase/migrations/202610190002_workspace_media.sql`
+
+既有專案只需執行第二個檔案，保留資料與原有函式權限，擴充自訂畫布圖片的原子發布。
 
 也可使用 Supabase CLI：
 
@@ -44,13 +47,13 @@ supabase secrets set --env-file .local/production-secrets.env
 
 另設定以下 Secrets（值僅為範例）：
 
-| 名稱 | 值 |
-| --- | --- |
-| `ALLOWED_ORIGINS` | `https://USERNAME.github.io`，僅 origin，不含 `/outdesign-site/` |
-| `GITHUB_OWNER` | 你的 GitHub 使用者名稱 |
-| `GITHUB_REPO` | `outdesign-site` |
-| `GITHUB_WORKFLOW` | `deploy.yml` |
-| `GITHUB_DISPATCH_TOKEN` | 限定該儲存庫、Actions: write 的 fine-grained token |
+| 名稱                    | 值                                                               |
+| ----------------------- | ---------------------------------------------------------------- |
+| `ALLOWED_ORIGINS`       | `https://USERNAME.github.io`，僅 origin，不含 `/outdesign-site/` |
+| `GITHUB_OWNER`          | 你的 GitHub 使用者名稱                                           |
+| `GITHUB_REPO`           | `outdesign-site`                                                 |
+| `GITHUB_WORKFLOW`       | `deploy.yml`                                                     |
+| `GITHUB_DISPATCH_TOKEN` | 限定該儲存庫、Actions: write 的 fine-grained token               |
 
 多個允許來源以逗號分隔，例如 GitHub Pages 與你自己的 HTTPS 網域。後端會拒絕萬用字元或帶有路徑的來源。
 
@@ -102,11 +105,11 @@ Repository → Settings → Pages：Source 選 **GitHub Actions**。
 
 Repository → Settings → Secrets and variables → Actions → **Variables**：
 
-| 名稱 | 一般專案 | 使用者首頁儲存庫 |
-| --- | --- | --- |
-| `PUBLIC_API_URL` | 完整作者 API 網址 | 同左 |
-| `SITE_URL` | `https://USERNAME.github.io` | 同左 |
-| `BASE_PATH` | `/outdesign-site/` | `/` |
+| 名稱             | 一般專案                     | 使用者首頁儲存庫 |
+| ---------------- | ---------------------------- | ---------------- |
+| `PUBLIC_API_URL` | 完整作者 API 網址            | 同左             |
+| `SITE_URL`       | `https://USERNAME.github.io` | 同左             |
+| `BASE_PATH`      | `/outdesign-site/`           | `/`              |
 
 這些是公開網址，不是秘密。正式密碼雜湊與 GitHub token 保留於 Supabase Secrets。
 

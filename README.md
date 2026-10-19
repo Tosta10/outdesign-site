@@ -24,7 +24,7 @@ Windows 也可直接執行 `start.cmd`；此電腦會自動使用 Codex 已提�
 - 五個靜態頁面：首頁 `/`、作品 `/work/`、筆記 `/journal/`、關於 `/about/`、資源 `/resources/`，搭配右側抽屜導覽。
 - 桌面與手機版；鍵盤導覽、原生 dialog、減少動態設定。
 - 圖層、畫布、屬性面板與浮動工具列；長按拖曳或方向鍵排序作品、筆記與當前分頁區塊，支援復原／重做。
-- Prism／Quiet／Luminous 三種視覺組合。
+- Prism／Verdant 墨綠兩種完整視覺組合，舊 Quiet／Luminous 內容自動轉為 Prism。
 - 草稿自動儲存、手動儲存、撤銷／重做、JSON 備份與匯入。
 - 圖片、音樂、PDF／ZIP／TXT 上傳；圖片必要時縮至長邊 1800px 並轉 WebP。
 - 明確發布、發布歷史、歷史版本載入草稿、建置失敗重試。
@@ -37,7 +37,7 @@ Windows 也可直接執行 `start.cmd`；此電腦會自動使用 Codex 已提�
 
 完整步驟見 [部署文件](docs/DEPLOYMENT.md)。GitHub Pages 承載靜態網站；Supabase 承載驗證、草稿與檔案。
 
-1. 建立 Supabase 專案，套用 `supabase/migrations/202610190001_studio.sql`。
+1. 建立 Supabase 專案，依序套用 `supabase/migrations/` 中的兩個 SQL 檔案。
 2. 部署 `studio-api` Edge Function，設定兩組密碼雜湊及允許來源。
 3. 將專案放到 GitHub，設定 Pages 的 Source 為 GitHub Actions。
 4. 設定 `PUBLIC_API_URL`、`SITE_URL`、`BASE_PATH` 三個 Repository Variables。
@@ -77,3 +77,5 @@ tests/                 驗證、權限、草稿與檔案安全測試
 更多：[視覺設計](docs/DESIGN.md) · [安全與資料流程](docs/SECURITY.md) · [部署文件](docs/DEPLOYMENT.md) · [效能檢查](docs/PERFORMANCE.md)
 
 交互與代碼工作區：選擇卡片效果、調整角度與阻尼，查看實際 TypeScript／CSS；以 `content.json` 批次編輯整站或以 `theme.css` 調整型別化視覺變數。任意 JavaScript／HTML 模板仍由 GitHub 原始碼修改。
+
+作者工作區新增可巢狀面板、自由定位與縮放、水平／垂直／網格 Auto Layout、圖層複製／刪除、鎖定／隱藏、8px 吸附與裝置畫布。編輯時封鎖訪客功能，預覽時恢復。左側頁面／圖層自動決定右側屬性；內容、風格、媒體、互動、佈局面板皆提供獨立 JSON 程式碼編輯。

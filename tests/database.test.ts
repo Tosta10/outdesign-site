@@ -19,6 +19,15 @@ test("production PostgreSQL migration and authorization contracts", async (t) =>
       "utf8",
     ),
   );
+  await db.exec(
+    await readFile(
+      new URL(
+        "../supabase/migrations/202610190002_workspace_media.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
   await db.query(
     "insert into public.studio_state(singleton,draft) values(true,$1::jsonb)",
     [JSON.stringify(initialContent)],
@@ -124,6 +133,31 @@ test("production PostgreSQL migration and authorization contracts", async (t) =>
         [id],
       );
       assert.equal(stillDenied.rows[0].allowed, false);
+    },
+  );
+  await t.test(
+    "canvas image references become public in the same publication transaction",
+    async () => {
+      const id = crypto.randomUUID();
+      await db.query(
+        "insert into public.studio_media(id,name,mime,size,kind,path) values($1,'canvas.webp','image/webp',100,'image',$2)",
+        [id, `${id}.webp`],
+      );
+      const content = {
+        ...initialContent,
+        workspace: { nodes: [{ image: `asset:${id}` }] },
+      };
+      await db.query("select public.studio_save_draft($1::jsonb,4)", [
+        JSON.stringify(content),
+      ]);
+      await db.query("select public.studio_publish(5,$1::uuid)", [
+        crypto.randomUUID(),
+      ]);
+      const media = await db.query<{ is_public: boolean }>(
+        "select is_public from public.studio_media where id=$1",
+        [id],
+      );
+      assert.equal(media.rows[0].is_public, true);
     },
   );
   await t.test(
