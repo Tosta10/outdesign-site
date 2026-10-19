@@ -1700,3 +1700,14 @@
     padding: 14px;
   }
 }
+
+/* Keep the featured entry in flow as copy grows, also in the author canvas. */
+.editor-canvas .site .featured-card {
+  position: relative;
+  left: auto;
+  bottom: auto;
+}
+.editor-canvas .site .hero {
+  padding-bottom: 105px;
+  max-height: none;
+}

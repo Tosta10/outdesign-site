@@ -280,9 +280,9 @@
     background: #ffffff0c;
   }
   .hero {
-    min-height: 690px;
-    height: calc(100svh - 165px);
-    max-height: 900px;
+    min-height: max(690px, calc(100svh - 165px));
+    height: auto;
+    max-height: none;
     position: relative;
     padding: 65px 5.7% 105px;
   }
@@ -473,9 +473,11 @@
     color: #c0c0bc;
   }
   .featured-card {
-    position: absolute;
-    bottom: 98px;
-    left: 5.7%;
+    display: block;
+    position: relative;
+    bottom: auto;
+    left: auto;
+    margin-top: 64px;
     width: 37%;
     max-width: 475px;
     padding: 17px 20px 19px;
@@ -1233,7 +1235,7 @@
       max-height: 230px;
     }
     .featured-card {
-      bottom: 110px;
+      bottom: auto;
     }
   }
   @media (max-width: 1100px) {

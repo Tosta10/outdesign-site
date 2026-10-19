@@ -28,6 +28,7 @@
     "invalid JSON rejection, bulk edit, typed CSS preview and undo",
     "logout",
     "wrong-password denial",
-    "no browser-stored credentials"
+    "no browser-stored credentials",
+    "hero CTA and featured card stay separated on wide/short screens"
   ]
 }

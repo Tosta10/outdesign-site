@@ -143,6 +143,21 @@ try {
     0,
     "Homepage only contains curated navigation",
   );
+  for (const viewport of [
+    { width: 1920, height: 890 },
+    { width: 1366, height: 600 },
+    { width: 1024, height: 768 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const copyBox = await page.locator(".hero-copy").boundingBox();
+    const featuredBox = await page.locator(".featured-card").boundingBox();
+    assert.ok(
+      featuredBox.y >= copyBox.y + copyBox.height + 20,
+      `Hero overlap at ${viewport.width}x${viewport.height}`,
+    );
+  }
+  await page.setViewportSize({ width: 1440, height: 1080 });
   await page.goto(`${origin}/work/`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "設計", exact: true }).click();
   assert.equal(await page.locator(".work-card:visible").count(), 1);
@@ -470,6 +485,7 @@ try {
       "publish",
       "history restore",
       "five static pages with separated content and accessible navigation",
+      "hero CTA and featured card stay separated on wide/short screens",
       "canvas keyboard section reordering and undo",
       "long-press pointer project reordering",
       "editor page switching",
