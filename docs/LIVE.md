@@ -12,6 +12,8 @@
 
 ## 編輯與發布
 
+已設定專用發布權杖：僅限 `Tosta10/outdesign-site`，Actions 讀寫與必要的 Metadata 唯讀，於 **2027-01-17** 到期。權杖只存於 Supabase Secrets。到期前需更新 `GITHUB_DISPATCH_TOKEN`；到期不影響既有網站、作者登入或草稿儲存。
+
 編輯器自動儲存草稿；訪客只會看到已成功部署的發布版本。完整一鍵發布需在 Supabase Edge Function Secrets 設定 `GITHUB_DISPATCH_TOKEN`，使用僅限此儲存庫、Actions 讀寫的 fine-grained token。權杖到期時需要更新此 Secret。
 
 尚未設定發布權杖時，按「發布」仍會儲存發布版本，但會明確顯示自動部署未設定。此時可在上方 CI/CD 連結按 **Run workflow**，部署最新發布版本。不要將發布權杖加入前端環境變數或 Git。
