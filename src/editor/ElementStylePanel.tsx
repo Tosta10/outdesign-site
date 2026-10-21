@@ -18,17 +18,19 @@ export function ElementStylePanel({
 }) {
   const [chrome, setChrome] = useState("header");
   if (selection.startsWith("node:")) return null;
-  const key = selection.startsWith("copy:")
-    ? `copy-${selection.slice(5)}`
-    : selection.startsWith("project:")
-      ? `project-${selection.slice(8)}`
-      : selection.startsWith("note:")
-        ? `note-${selection.slice(5)}`
-        : selection === "about" && page === "home"
-          ? "mission"
-          : selection === "settings"
-            ? chrome
-            : selection;
+  const key = selection.startsWith("element:")
+    ? selection.slice(8)
+    : selection.startsWith("copy:")
+      ? `copy-${selection.slice(5)}`
+      : selection.startsWith("project:")
+        ? `project-${selection.slice(8)}`
+        : selection.startsWith("note:")
+          ? `note-${selection.slice(5)}`
+          : selection === "about" && page === "home"
+            ? "mission"
+            : selection === "settings"
+              ? chrome
+              : selection;
   const values = content.presentation?.elements?.[key] || {};
   const patch = (name: string, value: unknown) =>
     update((next) => {

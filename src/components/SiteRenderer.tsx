@@ -8,6 +8,7 @@ import { assetUrl } from "../lib/content";
 import { CanvasPanels } from "./CanvasPanels";
 import { Icon } from "./Icon";
 import { EditableText } from "./EditableText";
+import { SourceValue } from "./SourceValue";
 import {
   ContentSection,
   defaultSections,
@@ -45,6 +46,9 @@ export function SiteRenderer({
     />
   );
   const first = c.projects[0];
+  const value = (path: string) => (
+    <SourceValue content={c} path={path} editing={editing} />
+  );
   const scenic =
     c.hero.image === "/assets/prism.svg"
       ? "/assets/lunar-landscape.webp"
@@ -121,6 +125,7 @@ export function SiteRenderer({
         <div className="hero-frame">
           {pageLayout?.builtins !== false && page === "home" && scenic && (
             <img
+              {...elementProps(c, "hero-image", editing)}
               className="lunar-backdrop"
               src={img(scenic)}
               alt={
@@ -140,6 +145,7 @@ export function SiteRenderer({
             {...elementProps(c, "header", editing)}
           >
             <a
+              {...elementProps(c, "brand", editing)}
               className={`wordmark ${editing && selected === "settings" ? "is-selected" : ""}`}
               data-edit={editing ? "settings" : undefined}
               data-page-target="home"
@@ -147,18 +153,19 @@ export function SiteRenderer({
               aria-label={`${c.settings.name} 首頁`}
             >
               <img
+                {...elementProps(c, "brand-logo", editing)}
                 className="brand-mark"
                 src={img(c.presentation?.logo || "/assets/outdesign-mark.webp")}
                 width="36"
                 height="36"
                 alt=""
               />
-              <span>{c.settings.name}</span>
+              {value("settings.name")}
             </a>
             <div className="header-actions">
               <button
+                {...elementProps(c, "menu-button", editing)}
                 className="menu-toggle"
-                data-edit={editing ? "copy:menu.label" : undefined}
                 data-menu-toggle
                 aria-controls="site-navigation"
                 aria-expanded="false"
@@ -176,20 +183,23 @@ export function SiteRenderer({
               {...elementProps(c, "hero", editing)}
               data-edit={editing ? "hero" : undefined}
             >
-              <div className="hero-copy">
+              <div
+                className="hero-copy"
+                {...elementProps(c, "hero-copy", editing)}
+              >
                 <p className="eyebrow" data-field="上方短句">
-                  {c.hero.eyebrow}
+                  {value("hero.eyebrow")}
                 </p>
                 <h1>
-                  <span data-field="標題第一行">{c.hero.line1}</span>
+                  {value("hero.line1")}
                   <br />
-                  <span data-field="標題第二行">{c.hero.line2}</span>
+                  {value("hero.line2")}
                 </h1>
                 <p
                   className="hero-description preserve-lines"
                   data-field="介紹文字"
                 >
-                  {c.hero.description}
+                  {value("hero.description")}
                 </p>
               </div>
               <a
@@ -210,9 +220,9 @@ export function SiteRenderer({
                   <div>
                     <p className="mission-kicker">{text("mission.kicker")}</p>
                     <h2 className="preserve-lines" data-field="關於我的標題">
-                      {c.about.title}
+                      {value("about.title")}
                     </h2>
-                    <p className="mission-description">{c.about.body}</p>
+                    <p className="mission-description">{value("about.body")}</p>
                     <span className="mission-link">
                       <span className="circle-arrow">
                         <Icon name="arrow" size={18} />
@@ -222,6 +232,7 @@ export function SiteRenderer({
                   </div>
                   <div className="mission-study">
                     <img
+                      {...elementProps(c, "mission-image", editing)}
                       src={img(
                         c.presentation?.missionImage ||
                           "/assets/lunar-landscape.webp",
@@ -257,6 +268,11 @@ export function SiteRenderer({
                   </div>
                   <div className="featured-body">
                     <img
+                      {...elementProps(
+                        c,
+                        `field-projects-${first.id}-image`,
+                        editing,
+                      )}
                       src={img(first.image)}
                       alt={first.alt}
                       width="340"
@@ -264,8 +280,8 @@ export function SiteRenderer({
                       loading="lazy"
                     />
                     <div>
-                      <h2>{first.title}</h2>
-                      <p>{first.description}</p>
+                      <h2>{value(`projects.${first.id}.title`)}</h2>
+                      <p>{value(`projects.${first.id}.description`)}</p>
                       <span className="text-link">
                         {text("featured.link")} <Icon name="arrow" size={14} />
                       </span>
@@ -273,7 +289,10 @@ export function SiteRenderer({
                   </div>
                 </a>
               )}
-              <div className="hero-bottom">
+              <div
+                className="hero-bottom"
+                {...elementProps(c, "hero-bottom", editing)}
+              >
                 <span className="scroll-cue" aria-hidden="true">
                   <span className="scroll-line" />
                   {text("hero.scroll")}
@@ -281,7 +300,11 @@ export function SiteRenderer({
               </div>
             </section>
           ) : (
-            <div className="page-intro" id="top">
+            <div
+              className="page-intro"
+              id="top"
+              {...elementProps(c, "page-intro", editing)}
+            >
               <p className="eyebrow">
                 OUTDESIGN /{" "}
                 {page === "work"
@@ -383,21 +406,39 @@ export function SiteRenderer({
       <footer
         {...elementProps(c, "footer", editing)}
         className="site-footer section-shell"
-        data-edit={editing ? "settings" : undefined}
       >
         <div className="footer-meta">
           <span>
-            © {new Date().getUTCFullYear()} {c.settings.name}
+            {text(
+              "footer.copyright",
+              `© ${new Date().getUTCFullYear()} ${c.settings.name}`,
+            )}
           </span>
           <button data-studio-launch className="author-link">
             <Icon name="lock" size={12} />
             {text("footer.author")}
           </button>
-          <a href="#top" aria-label="回到頂端">
+          <a
+            href="#top"
+            aria-label="回到頂端"
+            {...elementProps(c, "footer-top", editing)}
+          >
             ↑
           </a>
         </div>
       </footer>
+      {c.workspace?.scripts?.some((s) => s.page === page && s.enabled) &&
+        !editing && (
+          <script
+            type="application/json"
+            data-site-logic
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify(
+                c.workspace.scripts.filter((s) => s.page === page && s.enabled),
+              ).replaceAll("<", "\\u003c"),
+            }}
+          />
+        )}
     </div>
   );
 }

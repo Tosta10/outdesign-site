@@ -804,16 +804,6 @@ export function ThemePanel({
         }
       />
       <Field
-        label="瀏覽器標題"
-        value={c.settings.siteTitle}
-        max={100}
-        onChange={(v) =>
-          update((n) => {
-            n.settings.siteTitle = v;
-          })
-        }
-      />
-      <Field
         label="網站描述"
         value={c.settings.description}
         max={220}

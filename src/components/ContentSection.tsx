@@ -3,7 +3,7 @@ import { elementProps } from "../lib/presentation";
 import { assetUrl } from "../lib/content";
 import { EditableText } from "./EditableText";
 import { Icon } from "./Icon";
-import { CanvasHandle } from "./CanvasHandle";
+import { SourceValue } from "./SourceValue";
 export type SectionKey = "work" | "notes" | "about" | "attachments" | "contact";
 export const defaultSections: SectionKey[] = [
   "work",
@@ -39,6 +39,9 @@ export function ContentSection({
     />
   );
   const img = (v: string) => assetUrl(v, api, base, privateAssets);
+  const value = (path: string) => (
+    <SourceValue content={c} path={path} editing={editing} />
+  );
   const edit = (key: string) => (editing ? { "data-edit": key } : {});
   const editClass = (key: string) =>
     editing ? ` editable ${selected === key ? "is-selected" : ""}` : "";
@@ -52,7 +55,6 @@ export function ContentSection({
           {...elementProps(c, "work", editing)}
           id="work"
         >
-          <CanvasHandle id="section:work" label="作品" editing={editing} />
           <div className="section-heading">
             <div>
               <p className="eyebrow section-number">
@@ -93,11 +95,6 @@ export function ContentSection({
                 data-category={p.category}
                 data-edit={editing ? `project:${p.id}` : undefined}
               >
-                <CanvasHandle
-                  id={`project:${p.id}`}
-                  label={p.title}
-                  editing={editing}
-                />
                 <button
                   className="work-image-button"
                   data-optical-card
@@ -107,6 +104,11 @@ export function ContentSection({
                   <div className="work-image">
                     {p.image && (
                       <img
+                        {...elementProps(
+                          c,
+                          `field-projects-${p.id}-image`,
+                          editing,
+                        )}
                         src={img(p.image)}
                         alt={p.alt}
                         width="1200"
@@ -126,11 +128,11 @@ export function ContentSection({
                 </button>
                 <div className="work-caption">
                   <div>
-                    <h3>{p.title}</h3>
+                    <h3>{value(`projects.${p.id}.title`)}</h3>
                     <p>
                       {p.category}
                       <span>／</span>
-                      {p.year}
+                      {value(`projects.${p.id}.year`)}
                     </p>
                   </div>
                   <span className="caption-index">↗</span>
@@ -188,7 +190,6 @@ export function ContentSection({
             {...elementProps(c, "notes", editing)}
             id="notes"
           >
-            <CanvasHandle id="section:notes" label="筆記" editing={editing} />
             <div className="section-heading">
               <div>
                 <p className="eyebrow section-number">
@@ -209,25 +210,26 @@ export function ContentSection({
                   data-layout={`note:${n.id}`}
                   {...elementProps(c, `note-${n.id}`, editing)}
                 >
-                  <CanvasHandle
-                    id={`note:${n.id}`}
-                    label={n.title}
-                    editing={editing}
-                  />
                   <details
                     className={`note-item ${editing && selected === `note:${n.id}` ? "is-selected" : ""}`}
                     data-edit={editing ? `note:${n.id}` : undefined}
                   >
                     <summary>
-                      <span className="note-date">{n.date}</span>
-                      <h3>{n.title}</h3>
-                      <span className="note-tag">{n.tag}</span>
+                      <span className="note-date">
+                        {value(`notes.${n.id}.date`)}
+                      </span>
+                      <h3>{value(`notes.${n.id}.title`)}</h3>
+                      <span className="note-tag">
+                        {value(`notes.${n.id}.tag`)}
+                      </span>
                       <span className="note-plus">
                         <Icon name="plus" size={18} />
                       </span>
                     </summary>
                     <div className="note-body">
-                      <p className="preserve-lines">{n.excerpt}</p>
+                      <p className="preserve-lines">
+                        {value(`notes.${n.id}.excerpt`)}
+                      </p>
                       {n.url && (
                         <a
                           className="text-link"
@@ -257,12 +259,11 @@ export function ContentSection({
           id="about"
           {...edit("about")}
         >
-          <CanvasHandle id="section:about" label="關於" editing={editing} />
           <div className="about-heading">
             <p className="eyebrow section-number">
               {text("about.eyebrow", "03 / A LITTLE ABOUT ME")}
             </p>
-            <h2 className="preserve-lines">{c.about.title}</h2>
+            <h2 className="preserve-lines">{value("about.title")}</h2>
             <div className="tag-list">
               {c.about.tags.map((tag) => (
                 <span key={tag}>{tag}</span>
@@ -270,10 +271,11 @@ export function ContentSection({
             </div>
           </div>
           <div className="about-copy">
-            <p className="preserve-lines">{c.about.body}</p>
+            <p className="preserve-lines">{value("about.body")}</p>
             {c.settings.showMusic && (
               <div
                 className="music-widget"
+                {...elementProps(c, "music", editing)}
                 data-edit={editing ? "music" : undefined}
               >
                 <button
@@ -294,8 +296,8 @@ export function ContentSection({
                   <span className="tiny-label">
                     {text("music.eyebrow", "ON MY FREQUENCY")}
                   </span>
-                  <p>{c.music.title}</p>
-                  <span className="music-artist">{c.music.artist}</span>
+                  <p>{value("music.title")}</p>
+                  <span className="music-artist">{value("music.artist")}</span>
                 </div>
                 <div className="sound-bars" aria-hidden="true">
                   <i />
@@ -327,11 +329,6 @@ export function ContentSection({
             {...elementProps(c, "attachments", editing)}
             data-edit={editing ? "attachments" : undefined}
           >
-            <CanvasHandle
-              id="section:attachments"
-              label="附件"
-              editing={editing}
-            />
             <p className="eyebrow">
               {text("resources.eyebrow", "RESOURCES / 下載附件")}
             </p>
@@ -342,10 +339,11 @@ export function ContentSection({
                 target="_blank"
                 rel="noopener noreferrer"
                 className="attachment-link"
+                {...elementProps(c, `attachment-${a.id}`, editing)}
               >
                 <Icon name="file" />
-                <span>{a.name}</span>
-                <span>{a.label}</span>
+                <span>{value(`attachments.${a.id}.name`)}</span>
+                <span>{value(`attachments.${a.id}.label`)}</span>
                 <Icon name="diagonal" size={16} />
               </a>
             ))}
@@ -362,14 +360,13 @@ export function ContentSection({
           id="contact"
           {...edit("contact")}
         >
-          <CanvasHandle id="section:contact" label="聯絡" editing={editing} />
           <div className="contact-top">
             <p className="eyebrow section-number">
               {text("contact.eyebrow", "04 / LET'S MAKE SOMETHING")}
             </p>
           </div>
           <div className="contact-main">
-            <h2 className="preserve-lines">{c.contact.headline}</h2>
+            <h2 className="preserve-lines">{value("contact.headline")}</h2>
             <a
               className="contact-orbit"
               href={
@@ -386,7 +383,7 @@ export function ContentSection({
               className="email-link"
               href={isExampleEmail ? undefined : `mailto:${c.contact.email}`}
             >
-              {c.contact.email}
+              {value("contact.email")}
             </a>
             {isExampleEmail && (
               <span className="tiny-label">示範信箱 · 請於作者模式修改</span>

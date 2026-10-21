@@ -1,7 +1,8 @@
 import { instantiateAssembly } from "../lib/assemblies";
-import { descendants } from "../lib/workspace";
 import {
   memo,
+  lazy,
+  Suspense,
   useDeferredValue,
   useCallback,
   useEffect,
@@ -23,22 +24,30 @@ import {
   pageNames,
   type SitePage,
 } from "../components/SiteRenderer";
-import { defaultSections } from "../components/ContentSection";
-import { BlockLibrary, blockMime } from "./BlockLibrary";
-import {
-  createBlockRecipe,
-  blockRecipes,
-  type BlockRecipe,
-} from "../lib/blocks";
+import { createBlockRecipe, type BlockRecipe } from "../lib/blocks";
 import { ElementStylePanel } from "./ElementStylePanel";
 import { PresentationPanel } from "./PresentationPanel";
 import { copyDefaults } from "../lib/presentation";
-import { WorkspacePanel, LayerTree } from "./WorkspacePanel";
+import { WorkspacePanel } from "./WorkspacePanel";
 import { ScopedCode } from "./ScopedCode";
 import { useFreeLayout } from "./useFreeLayout";
 import { selectedForPage } from "../lib/workspace";
-import { useCanvasDrag } from "./useCanvasDrag";
 import { Icon } from "../components/Icon";
+import { LayerExplorer } from "./LayerExplorer";
+import {
+  PageTitleField,
+  LayerTransformPanel,
+  SourceProperties,
+} from "./LayerProperties";
+import { PanelResizer } from "./ResizablePanels";
+import { useLayerManipulation, type CanvasTool } from "./useLayerManipulation";
+import {
+  patchLayer,
+  selectionKey,
+  removeLayer,
+  layerNames,
+} from "../lib/layers";
+import { sourcePath, writeSource, sourceLabels } from "../lib/source-fields";
 import { initViewer } from "../lib/viewer";
 import { ApiError, prepareUpload, StudioApi } from "./api";
 import { Auth } from "./Auth";
@@ -46,6 +55,7 @@ import { CodePanel, InteractionsPanel } from "./advanced";
 import { ContentPanel, ThemePanel } from "./panels";
 
 const MemoSiteRenderer = memo(SiteRenderer);
+const ScratchStudio = lazy(() => import("./ScratchStudio"));
 
 type PublishResult = {
   version: string;
@@ -135,6 +145,7 @@ function Editor({
   );
   const [layersOpen, setLayersOpen] = useState(false);
   const [blockMode, setBlockMode] = useState(false);
+  const [tool, setTool] = useState<CanvasTool>("move");
   const deferredContent = useDeferredValue(content);
   const editGroup = useRef({ key: "", time: 0 });
   const [device, setDevice] = useState("auto"),
@@ -310,8 +321,8 @@ function Editor({
     const now = performance.now();
     const coalesce = Boolean(
       group &&
-      group === editGroup.current.key &&
-      now - editGroup.current.time < 650,
+        group === editGroup.current.key &&
+        now - editGroup.current.time < 650,
     );
     editGroup.current = { key: group, time: now };
     if (remember && !coalesce) {
@@ -332,91 +343,9 @@ function Editor({
     edit(next);
     apply(next);
   }
-  function moveBlock(from: string, to: string) {
-    const [kind, fromId] = from.split(":"),
-      [targetKind, toId] = to.split(":");
-    if (kind !== targetKind || fromId === toId) return;
-    update((next) => {
-      if (kind === "node") {
-        const list = next.workspace?.nodes;
-        if (!list) return;
-        const a = list.findIndex((node) => node.id === fromId),
-          b = list.findIndex((node) => node.id === toId);
-        if (
-          a < 0 ||
-          b < 0 ||
-          list[a].locked ||
-          list[a].parent !== list[b].parent ||
-          list[a].page !== list[b].page
-        )
-          return;
-        list.splice(b, 0, list.splice(a, 1)[0]);
-      } else if (kind === "section") {
-        const sections = [...(next.layout?.sections || defaultSections)];
-        const a = sections.indexOf(fromId as (typeof sections)[number]),
-          b = sections.indexOf(toId as (typeof sections)[number]);
-        if (a < 0 || b < 0) return;
-        sections.splice(b, 0, sections.splice(a, 1)[0]);
-        next.layout = { sections };
-      } else if (kind === "project") {
-        const a = next.projects.findIndex((p) => p.id === fromId),
-          b = next.projects.findIndex((p) => p.id === toId);
-        if (a >= 0 && b >= 0)
-          next.projects.splice(b, 0, next.projects.splice(a, 1)[0]);
-      } else if (kind === "note") {
-        const a = next.notes.findIndex((n) => n.id === fromId),
-          b = next.notes.findIndex((n) => n.id === toId);
-        if (a >= 0 && b >= 0)
-          next.notes.splice(b, 0, next.notes.splice(a, 1)[0]);
-      }
-    });
-  }
-  function stepBlock(id: string, direction: number) {
-    if (!current.current) return;
-    const [kind, item] = id.split(":"),
-      c = current.current;
-    const ids =
-      kind === "node"
-        ? (c.workspace?.nodes || [])
-            .filter(
-              (node) =>
-                node.page === page &&
-                node.parent ===
-                  c.workspace?.nodes.find((node) => node.id === item)?.parent,
-            )
-            .map((node) => node.id)
-        : kind === "section"
-          ? (c.layout?.sections || defaultSections).filter((key) =>
-              (
-                ({
-                  home: [],
-                  work: ["work"],
-                  journal: ["notes"],
-                  about: ["about", "contact"],
-                  resources: ["attachments"],
-                }) as Record<SitePage, string[]>
-              )[page].includes(key),
-            )
-          : kind === "project"
-            ? c.projects.map((p) => p.id)
-            : c.notes.map((n) => n.id);
-    const index = ids.indexOf(item as never),
-      target = ids[index + direction];
-    if (target) {
-      moveBlock(id, `${kind}:${target}`);
-      setNotice("區塊位置已更新，正在自動儲存。");
-    }
-  }
-  useCanvasDrag(
-    view,
-    Boolean(content && !preview),
-    moveBlock,
-    stepBlock,
-    setNotice,
-  );
   useFreeLayout(
     view,
-    Boolean(content && !preview),
+    Boolean(content && !preview && !blockMode),
     content?.workspace?.nodes || [],
     (id, patch) =>
       update((next) => {
@@ -426,6 +355,95 @@ function Editor({
     (id) => setSelection(`node:${id}`),
     snap,
   );
+  const suppressClick = useLayerManipulation(
+    view,
+    Boolean(content && !preview && !blockMode),
+    content,
+    selection,
+    page,
+    tool,
+    snap,
+    selectLayer,
+    update,
+  );
+  function deleteSelected() {
+    if (!current.current || !discardCode()) return;
+    const key = selectionKey(selection, page);
+    const element = view.current?.querySelector<HTMLElement>(
+      `[data-element-key="${CSS.escape(key)}"]`,
+    );
+    if (element?.closest('[data-layer-locked="true"],[data-locked="true"]'))
+      return;
+    update((next) => removeLayer(next, selection, page));
+    setNotice("圖層已刪除，可使用復原。原始內容可在左側選取後還原。");
+  }
+  useEffect(() => {
+    if (!content || preview || blockMode) return;
+    const handler = (event: KeyboardEvent) => {
+      if (
+        (event.target as Element)?.closest(
+          'input,textarea,select,[contenteditable="true"],dialog',
+        )
+      )
+        return;
+      if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        deleteSelected();
+        return;
+      }
+      if (event.key.toLowerCase() === "v") setTool("select");
+      if (event.key.toLowerCase() === "m") setTool("move");
+      if (event.key.toLowerCase() === "h") setTool("pan");
+      if (
+        !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(
+          event.key,
+        ) ||
+        (event.target as Element)?.closest(
+          "[data-drag-handle],[data-free-move]",
+        )
+      )
+        return;
+      const key = selectionKey(selection, page),
+        el = view.current?.querySelector<HTMLElement>(
+          `[data-element-key="${CSS.escape(key)}"]`,
+        );
+      if (!el || el.closest('[data-layer-locked="true"],[data-locked="true"]'))
+        return;
+      event.preventDefault();
+      const values = current.current?.presentation?.elements?.[key] || {},
+        step = event.shiftKey ? 10 : 1;
+      update((next) =>
+        patchLayer(next, key, {
+          x: Math.max(
+            -3000,
+            Math.min(
+              3000,
+              (values.x || 0) +
+                (event.key === "ArrowLeft"
+                  ? -step
+                  : event.key === "ArrowRight"
+                    ? step
+                    : 0),
+            ),
+          ),
+          y: Math.max(
+            -3000,
+            Math.min(
+              3000,
+              (values.y || 0) +
+                (event.key === "ArrowUp"
+                  ? -step
+                  : event.key === "ArrowDown"
+                    ? step
+                    : 0),
+            ),
+          ),
+        }),
+      );
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [selection, page, content, preview, blockMode]);
   function insertRecipe(
     recipe: BlockRecipe | `preset:${string}`,
     droppedParent?: string | null,
@@ -569,7 +587,7 @@ function Editor({
     if (!discardCode()) return;
     if (
       current.current &&
-      JSON.stringify(current.current) !== saved.current &&
+      currentSignature.current !== saved.current &&
       !window.confirm("仍有未儲存的修改，確定離開？")
     )
       return;
@@ -631,6 +649,7 @@ function Editor({
       assetCache.current.set(result.media.id, objectUrl);
       setAssets((previous) => ({ ...previous, [result.media.id]: objectUrl }));
       setNotice("素材已上傳，選擇「套用」後加入內容。");
+      return result.media;
     } catch (e) {
       fail(e);
     } finally {
@@ -664,6 +683,9 @@ function Editor({
         setSelection("music");
         setPage("about");
       } else if (m.kind === "image") {
+        const source = selection.startsWith("element:")
+          ? sourcePath(selection.slice(8), next)
+          : undefined;
         const project =
           selection.startsWith("project:") &&
           next.projects.find((p) => p.id === selection.slice(8));
@@ -672,7 +694,15 @@ function Editor({
           next.workspace?.nodes.find(
             (node) => node.id === selection.slice(5) && node.type === "image",
           );
-        if (canvasImage) canvasImage.image = value;
+        if (source?.endsWith(".image")) writeSource(next, source, value);
+        else if (selection === "element:brand-logo") {
+          next.presentation ||= {};
+          next.presentation.logo = value;
+        } else if (selection === "element:mission-image") {
+          next.presentation ||= {};
+          next.presentation.missionImage = value;
+        } else if (selection === "element:hero-image") next.hero.image = value;
+        else if (canvasImage) canvasImage.image = value;
         else if (project) project.image = value;
         else if (selection === "settings") {
           next.presentation ||= {};
@@ -790,9 +820,56 @@ function Editor({
     saving: "正在儲存…",
     error: "尚未儲存",
   };
+  if (blockMode)
+    return (
+      <div className="editor-shell blueprint-mode">
+        <Suspense
+          fallback={<div className="studio-loading">正在開啟積木工作區…</div>}
+        >
+          <ScratchStudio
+            content={content}
+            page={page}
+            api={api.base}
+            base={base}
+            assets={assets}
+            update={update}
+            changePage={changePage}
+            onMode={() => setBlockMode(false)}
+            onSave={() => {
+              saveRef.current().catch(fail);
+            }}
+            onPublish={() => {
+              publish();
+            }}
+            onExit={exit}
+            onUndo={() => {
+              if (undo.current.length && current.current) {
+                redo.current.push(current.current);
+                apply(undo.current.pop()!, false);
+              }
+            }}
+            onRedo={() => {
+              if (redo.current.length && current.current) {
+                undo.current.push(current.current);
+                apply(redo.current.pop()!, false);
+              }
+            }}
+            canUndo={Boolean(undo.current.length)}
+            canRedo={Boolean(redo.current.length)}
+            status={saveLabels[saveState]}
+            error={error}
+            onImport={async (file) => {
+              const media = await upload(file);
+              return media ? `asset:${media.id}` : undefined;
+            }}
+          />
+        </Suspense>
+      </div>
+    );
   return (
     <div
-      className={`editor-shell ${blockMode ? "blueprint-mode" : ""} ${panelOpen ? "panel-open" : ""} ${!preview ? "has-layers" : ""} ${layersOpen ? "layers-open" : ""}`}
+      className={`editor-shell layer-studio ${panelOpen ? "panel-open" : ""} ${!preview ? "has-layers" : ""} ${layersOpen ? "layers-open" : ""}`}
+      data-canvas-tool={tool}
       data-history-tick={historyTick}
       data-preview-pending={content !== deferredContent}
     >
@@ -890,189 +967,163 @@ function Editor({
         </div>
       </header>
       {!preview && (
-        <aside className="editor-layers" aria-label="頁面與圖層">
-          <div className="studio-modes" role="group" aria-label="編輯模式">
-            <button
-              aria-pressed={!blockMode}
-              onClick={() => setBlockMode(false)}
+        <div
+          className="editor-toolstrip"
+          role="toolbar"
+          aria-label="繪圖與物件工具"
+        >
+          <button
+            className="layers-drawer-toggle"
+            aria-label="開關圖層面板"
+            onClick={() => setLayersOpen((v) => !v)}
+          >
+            圖層
+          </button>
+          <div className="tool-group">
+            {(
+              [
+                ["select", "↖", "選取 V"],
+                ["move", "✥", "移動 M"],
+                ["pan", "✋", "平移 H"],
+              ] as const
+            ).map(([value, symbol, label]) => (
+              <button
+                key={value}
+                aria-label={label}
+                aria-pressed={tool === value}
+                onClick={() => setTool(value)}
+              >
+                <span>{symbol}</span>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="tool-group">
+            {(["left", "center", "right"] as const).map((align, i) => (
+              <button
+                key={align}
+                aria-label={`物件${["靠左", "置中", "靠右"][i]}`}
+                onClick={() => {
+                  const key = selectionKey(selection, page),
+                    el = view.current?.querySelector<HTMLElement>(
+                      `[data-element-key="${CSS.escape(key)}"]`,
+                    ),
+                    parent = el?.parentElement;
+                  if (
+                    !el ||
+                    !parent ||
+                    el.closest(
+                      '[data-layer-locked="true"],[data-locked="true"]',
+                    )
+                  )
+                    return;
+                  const r = el.getBoundingClientRect(),
+                    p = parent.getBoundingClientRect(),
+                    scale = r.width / (el.offsetWidth || 1);
+                  const desired =
+                    align === "left"
+                      ? p.left
+                      : align === "center"
+                        ? p.left + (p.width - r.width) / 2
+                        : p.right - r.width;
+                  update((next) =>
+                    patchLayer(next, key, {
+                      x: Math.max(
+                        -3000,
+                        Math.min(
+                          3000,
+                          (next.presentation?.elements?.[key]?.x || 0) +
+                            (desired - r.left) / (scale || 1),
+                        ),
+                      ),
+                    }),
+                  );
+                }}
+              >
+                {["⇤", "↔", "⇥"][i]}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => insertRecipe("panel")}>＋ 面板</button>
+          <button onClick={() => insertRecipe("text")}>＋ 文字</button>
+          <label className="tool-snap">
+            <input
+              type="checkbox"
+              checked={snap}
+              onChange={(e) => setSnap(e.target.checked)}
+            />
+            8px 吸附
+          </label>
+          <label>
+            裝置
+            <select
+              aria-label="畫布裝置"
+              value={device}
+              onChange={(e) => setDevice(e.target.value)}
             >
-              圖層
-            </button>
-            <button
-              aria-pressed={blockMode}
-              onClick={() => {
-                setBlockMode(true);
+              <option value="auto">適應視窗</option>
+              <option value="1440">桌面 1440</option>
+              <option value="768">平板 768</option>
+              <option value="390">手機 390</option>
+            </select>
+          </label>
+          <label>
+            縮放
+            <select
+              aria-label="畫布縮放"
+              value={zoom}
+              onChange={(e) => setZoom(Number(e.target.value))}
+            >
+              {[0.5, 0.75, 1, 1.25].map((z) => (
+                <option key={z} value={z}>
+                  {z * 100}%
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+      {!preview && (
+        <aside className="editor-layers" aria-label="頁面與圖層">
+          <label className="mode-switch">
+            切換模式
+            <select
+              aria-label="切換模式"
+              value="layers"
+              onChange={() => {
+                if (discardCode()) setBlockMode(true);
               }}
             >
-              積木模式
-            </button>
-          </div>
-          {blockMode && (
-            <BlockLibrary
-              insert={insertRecipe}
-              presets={content.workspace?.presets}
-              removePreset={(id) =>
-                update((next) => {
-                  next.workspace!.presets = next.workspace!.presets?.filter(
-                    (p) => p.id !== id,
-                  );
-                })
-              }
-              remaining={100 - (content.workspace?.nodes.length || 0)}
-            />
-          )}
-          <div className="layers-title">
-            <span>LAYERS</span>
-            <span>長按拖曳</span>
-          </div>
-
-          <p className="layer-section-label">頁面區塊</p>
-          <div className="layer-blocks">
-            {(content.layout?.sections || defaultSections)
-              .filter((key) =>
-                (
-                  ({
-                    home: [],
-                    work: ["work"],
-                    journal: ["notes"],
-                    about: ["about", "contact"],
-                    resources: ["attachments"],
-                  }) as Record<SitePage, string[]>
-                )[page].includes(key),
-              )
-              .map((key, index, list) => (
-                <div key={key}>
-                  <button
-                    onClick={() => {
-                      selectLayer(
-                        {
-                          work: content.projects[0]
-                            ? `project:${content.projects[0].id}`
-                            : "projects",
-                          notes: content.notes[0]
-                            ? `note:${content.notes[0].id}`
-                            : "notes",
-                          about: "about",
-                          contact: "contact",
-                          attachments: "attachments",
-                        }[key] as Selection,
-                      );
-                      requestAnimationFrame(() => {
-                        const node = view.current?.querySelector<HTMLElement>(
-                          `[data-layout="section:${key}"]`,
-                        );
-                        node?.scrollIntoView({
-                          block: "center",
-                          behavior: window.matchMedia(
-                            "(prefers-reduced-motion: reduce)",
-                          ).matches
-                            ? "auto"
-                            : "smooth",
-                        });
-                      });
-                    }}
-                  >
-                    {
-                      {
-                        work: "作品",
-                        notes: "筆記",
-                        about: "關於",
-                        attachments: "附件",
-                        contact: "聯絡",
-                      }[key]
-                    }
-                  </button>
-                  <button
-                    aria-label={`上移區塊：${key}`}
-                    disabled={index === 0}
-                    onClick={() => stepBlock(`section:${key}`, -1)}
-                  >
-                    <Icon name="up" size={12} />
-                  </button>
-                  <button
-                    aria-label={`下移區塊：${key}`}
-                    disabled={index === list.length - 1}
-                    onClick={() => stepBlock(`section:${key}`, 1)}
-                  >
-                    <Icon name="down" size={12} />
-                  </button>
-                </div>
-              ))}
-          </div>
-          {page === "home" && (
-            <button className="node-layer" onClick={() => selectLayer("hero")}>
-              首頁主視覺
-            </button>
-          )}
-          {page === "home" && (
-            <>
-              <button
-                className="node-layer"
-                onClick={() => selectLayer("about")}
-              >
-                介紹卡片
-              </button>
-            </>
-          )}
-          <button
-            className="node-layer"
-            onClick={() => selectLayer("settings")}
-          >
-            品牌與全站設定
-          </button>
-          {page === "work" &&
-            content.projects.map((item) => (
-              <button
-                key={item.id}
-                className="node-layer"
-                aria-label={`選取圖層：${item.title}`}
-                onClick={() => selectLayer(`project:${item.id}`)}
-              >
-                {item.title}
-              </button>
-            ))}
-          {page === "journal" &&
-            content.notes.map((item) => (
-              <button
-                key={item.id}
-                className="node-layer"
-                aria-label={`選取圖層：${item.title}`}
-                onClick={() => selectLayer(`note:${item.id}`)}
-              >
-                {item.title}
-              </button>
-            ))}
-          {page === "about" && (
-            <button className="node-layer" onClick={() => selectLayer("music")}>
-              音樂播放器
-            </button>
-          )}
-          <p className="layer-section-label">自訂圖層</p>
-          <LayerTree
-            content={content}
+              <option value="layers">圖層模式</option>
+              <option value="blocks">積木模式</option>
+            </select>
+          </label>
+          <LayerExplorer
+            content={deferredContent || content}
             page={page}
-            selected={selection}
+            root={view}
+            selection={selection}
             select={selectLayer}
+            update={update}
+            remove={deleteSelected}
           />
           <button
             className="node-layer"
             onClick={() => {
+              setSelection("settings");
               changeTab("layout");
               setPanelOpen(true);
             }}
           >
-            ＋ 新增面板／佈局
+            ＋ 新增物件
           </button>
-          <div className="layers-help">
-            <Icon name="edit" size={15} />
-            <p>
-              點選畫布編輯內容。
-              <br />
-              長按 ⠿ 拖曳排序，
-              <br />
-              也可使用方向鍵。
-            </p>
-          </div>
+          <button
+            className="node-layer"
+            onClick={() => selectLayer("settings")}
+          >
+            網站設定
+          </button>
+          <PanelResizer side="left" />
         </aside>
       )}
       <div
@@ -1085,22 +1136,6 @@ function Editor({
           }
         }}
         onDragStart={(event) => event.preventDefault()}
-        onDragOver={(event) => {
-          if (!preview && event.dataTransfer.types.includes(blockMime)) {
-            event.preventDefault();
-            event.dataTransfer.dropEffect = "copy";
-          }
-        }}
-        onDrop={(event) => {
-          const recipe = event.dataTransfer.getData(blockMime);
-          if (!preview && blockRecipes.some((r) => r.id === recipe)) {
-            event.preventDefault();
-            const id = (event.target as Element).closest<HTMLElement>(
-              ".node-frame",
-            )?.dataset.nodeId;
-            insertRecipe(recipe as BlockRecipe, id || null);
-          }
-        }}
         onKeyDownCapture={(event) => {
           if (
             !preview &&
@@ -1118,6 +1153,14 @@ function Editor({
           }
         }}
         onClickCapture={(event) => {
+          if (
+            suppressClick.current ||
+            (event.target as Element).closest("[data-layer-resize]")
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
           const target = event.target as Element;
           if (preview) {
             const link = target.closest<HTMLElement>("[data-page-target]");
@@ -1130,28 +1173,6 @@ function Editor({
           }
           event.preventDefault();
           event.stopPropagation();
-          const deleteId =
-            target.closest<HTMLElement>("[data-delete-node]")?.dataset
-              .deleteNode;
-          if (deleteId && current.current?.workspace) {
-            const node = current.current.workspace.nodes.find(
-              (n) => n.id === deleteId,
-            );
-            if (node && !node.locked) {
-              const ids = new Set([
-                node.id,
-                ...descendants(current.current.workspace.nodes, node.id),
-              ]);
-              update((next) => {
-                next.workspace!.nodes = next.workspace!.nodes.filter(
-                  (n) => !ids.has(n.id),
-                );
-              });
-              selectLayer(node.parent ? `node:${node.parent}` : "settings");
-              setNotice("面板已刪除，可使用頂部復原。");
-            }
-            return;
-          }
 
           if (
             target.closest(
@@ -1192,59 +1213,9 @@ function Editor({
           />
         </div>
       </div>
-      {!preview && (
-        <div className="canvas-view-tools">
-          <label>
-            裝置
-            <select
-              aria-label="畫布裝置"
-              value={device}
-              onChange={(e) => setDevice(e.target.value)}
-            >
-              <option value="auto">適應視窗</option>
-              <option value="1440">桌面 1440</option>
-              <option value="768">平板 768</option>
-              <option value="390">手機 390</option>
-            </select>
-          </label>
-          <label>
-            縮放
-            <select
-              aria-label="畫布縮放"
-              value={zoom}
-              onChange={(e) => setZoom(Number(e.target.value))}
-            >
-              {[0.5, 0.75, 1, 1.25].map((value) => (
-                <option key={value} value={value}>
-                  {value * 100}%
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={snap}
-              onChange={(e) => setSnap(e.target.checked)}
-            />
-            8px 吸附
-          </label>
-        </div>
-      )}
-      {!preview && (
-        <div className="canvas-toolbar" role="toolbar" aria-label="畫布工具">
-          <button
-            aria-label="開關圖層面板"
-            aria-pressed={layersOpen}
-            onClick={() => setLayersOpen((value) => !value)}
-          >
-            <Icon name="menu" size={16} />
-            <span>圖層與積木</span>
-          </button>
-        </div>
-      )}
       {panelOpen && (
         <aside className="editor-panel" aria-label="網站編輯面板">
+          <PanelResizer side="right" />
           <div className="panel-heading">
             <div>
               <p className="eyebrow">INSPECTOR / LIVE CANVAS</p>
@@ -1272,23 +1243,29 @@ function Editor({
           </div>
           <p className="selection-path">
             {pageNames[page]} /{" "}
-            {selection.startsWith("node:")
-              ? content.workspace?.nodes.find(
-                  (n) => `node:${n.id}` === selection,
-                )?.name || "積木"
-              : selection.startsWith("project:")
-                ? content.projects.find((p) => `project:${p.id}` === selection)
-                    ?.title
-                : selection.startsWith("copy:")
-                  ? selection.slice(5)
-                  : (
-                      {
-                        hero: "首頁主視覺",
-                        about: "介紹卡片",
-                        settings: "全站設定",
-                      } as Record<string, string>
-                    )[selection] || selection}
+            {selection.startsWith("element:")
+              ? sourceLabels[sourcePath(selection.slice(8), content) || ""] ||
+                layerNames[selection.slice(8)] ||
+                "選取物件"
+              : selection.startsWith("node:")
+                ? content.workspace?.nodes.find(
+                    (n) => `node:${n.id}` === selection,
+                  )?.name || "積木"
+                : selection.startsWith("project:")
+                  ? content.projects.find(
+                      (p) => `project:${p.id}` === selection,
+                    )?.title
+                  : selection.startsWith("copy:")
+                    ? selection.slice(5)
+                    : (
+                        {
+                          hero: "首頁主視覺",
+                          about: "介紹卡片",
+                          settings: "全站設定",
+                        } as Record<string, string>
+                      )[selection] || selection}
           </p>
+          <PageTitleField content={content} page={page} update={update} />
           <div className="panel-tabs" role="tablist" aria-label="編輯工具">
             {(
               [
@@ -1370,13 +1347,24 @@ function Editor({
               </div>
             )}
             {tab === "layout" && (
-              <WorkspacePanel
-                content={content}
-                page={page}
-                selection={selection}
-                select={selectLayer}
-                update={update}
-              />
+              <>
+                <LayerTransformPanel
+                  content={content}
+                  page={page}
+                  selection={selection}
+                  update={update}
+                />
+                {(selection.startsWith("node:") ||
+                  selection === "settings") && (
+                  <WorkspacePanel
+                    content={content}
+                    page={page}
+                    selection={selection}
+                    select={selectLayer}
+                    update={update}
+                  />
+                )}
+              </>
             )}
             {tab === "interactions" && (
               <InteractionsPanel content={content} update={update} />
@@ -1403,7 +1391,13 @@ function Editor({
               />
             )}
             {tab === "content" &&
-              (selection.startsWith("copy:") ? (
+              (selection.startsWith("element:") ? (
+                <SourceProperties
+                  content={content}
+                  selection={selection}
+                  update={update}
+                />
+              ) : selection.startsWith("copy:") ? (
                 <PresentationPanel
                   content={content}
                   selection={selection}

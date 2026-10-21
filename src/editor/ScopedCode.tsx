@@ -95,7 +95,7 @@ export function ScopedCode({
         (scope === "layout"
           ? !Array.isArray(value.nodes) ||
             Object.keys(value).some(
-              (key) => !["nodes", "pages", "presets"].includes(key),
+              (key) => !["nodes", "pages", "presets", "scripts"].includes(key),
             )
           : JSON.stringify(Object.keys(value).sort()) !==
             JSON.stringify(expected))

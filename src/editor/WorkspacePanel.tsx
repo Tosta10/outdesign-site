@@ -10,41 +10,6 @@ import type {
 import type { SitePage } from "../components/SiteRenderer";
 type Update = (mutate: (content: SiteContent) => void) => void;
 
-export function LayerTree({
-  content,
-  page,
-  selected,
-  select,
-}: {
-  content: SiteContent;
-  page: SitePage;
-  selected: Selection;
-  select: (value: Selection) => void;
-}) {
-  const nodes = (content.workspace?.nodes || []).filter(
-    (node) => node.page === page,
-  );
-  const layer = (parent: string | null, depth = 0): React.ReactNode =>
-    nodes
-      .filter((node) => node.parent === parent)
-      .map((node) => (
-        <div key={node.id}>
-          <button
-            className={`node-layer ${selected === `node:${node.id}` ? "selected" : ""}`}
-            style={{ paddingLeft: 12 + depth * 12 }}
-            aria-pressed={selected === `node:${node.id}`}
-            aria-label={`選取圖層：${node.name}`}
-            onClick={() => select(`node:${node.id}`)}
-          >
-            <span>{node.type === "frame" ? "▣" : "▤"}</span>
-            {node.name}
-            <small>{node.locked ? "鎖定" : node.hidden ? "隱藏" : ""}</small>
-          </button>
-          {layer(node.id, depth + 1)}
-        </div>
-      ));
-  return <div className="node-layers">{layer(null)}</div>;
-}
 function NumberField({
   label,
   value,
@@ -173,21 +138,6 @@ export function WorkspacePanel({
       {node && (
         <>
           <h3>圖層屬性 · {node.name}</h3>
-          <button
-            className="panel-danger"
-            disabled={node.locked}
-            onClick={() => {
-              const ids = new Set([node.id, ...descendants(nodes, node.id)]);
-              update((next) => {
-                next.workspace!.nodes = next.workspace!.nodes.filter(
-                  (item) => !ids.has(item.id),
-                );
-              });
-              select(node.parent ? `node:${node.parent}` : "settings");
-            }}
-          >
-            刪除此{node.type === "frame" ? "面板" : "積木"}（可復原）
-          </button>
           {node.type === "frame" && (
             <AssemblyPanel
               key={node.id}
@@ -468,7 +418,16 @@ export function WorkspacePanel({
                         ? `${item.name.slice(0, 55)} 副本`
                         : item.name,
                   }));
-                update((next) => next.workspace!.nodes.push(...copies));
+                update((next) => {
+                  next.workspace!.nodes.push(...copies);
+                  for (const [oldId, newId] of mapping) {
+                    const values =
+                      next.presentation?.elements?.[`node-${oldId}`];
+                    if (values)
+                      next.presentation!.elements![`node-${newId}`] =
+                        structuredClone(values);
+                  }
+                });
                 select(`node:${mapping.get(node.id)}`);
               }}
             >

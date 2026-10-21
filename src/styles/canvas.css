@@ -16,6 +16,37 @@
   font-size: var(--node-font);
   overflow-wrap: anywhere;
 }
+[data-layer-positioned] {
+  position: relative;
+  translate: var(--layer-x, 0px) var(--layer-y, 0px);
+  rotate: var(--layer-rotation, 0deg);
+}
+span[data-layer-positioned] {
+  display: inline-block;
+}
+.page-content {
+  display: flex;
+  flex-direction: column;
+}
+.site-footer.section-shell {
+  display: block;
+}
+.site-footer .footer-meta {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+}
+.site-footer .footer-meta > span {
+  margin-right: 0;
+}
+@container site (max-width: 600px) {
+  /* Preserve readable flow on narrow screens after desktop free positioning. */
+  [data-layer-positioned] {
+    translate: none;
+    rotate: none;
+  }
+}
 .node-size-fill {
   width: 100%;
 }
