@@ -323,6 +323,16 @@ export async function studioRegression({
   await stack.locator(".scratch-event").dblclick();
   await label("修改觸發事件").selectOption("click");
   await button("完成").click();
+  await tab("流程控制").click();
+  await button(/^重複執行/).dragTo(
+    stack.locator(":scope > .logic-block-unit > .logic-drop-slot").last(),
+  );
+  await tab("移動與變形").click();
+  const repeatBranch = stack.locator(".logic-branch").last();
+  await button(/^水平移動/).dragTo(
+    repeatBranch.locator(".logic-drop-slot").first(),
+  );
+  await button(/^旋轉/).dragTo(repeatBranch.locator(".logic-drop-slot").last());
   await page.screenshot({ path: "artifacts/scratch-logic-workspace.png" });
   const logicAxe = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
@@ -350,6 +360,18 @@ export async function studioRegression({
       )?.textContent === "Scratch標題",
   );
   assert.equal(await runningTitle.evaluate((el) => el.style.opacity), "0.5");
+  await page.waitForFunction(
+    () =>
+      document.querySelector(
+        '.logic-live-preview [data-element-key="field-hero-line1"]',
+      ) &&
+      Number.parseFloat(
+        document.querySelector(
+          '.logic-live-preview [data-element-key="field-hero-line1"]',
+        ).style.translate,
+      ) === 72,
+  );
+  assert.equal(await runningTitle.evaluate((el) => el.style.rotate), "3deg");
   await button("關閉積木視窗").click();
   await tab("圖像匯入").click();
   await label("積木匯入圖片").setInputFiles({
@@ -461,7 +483,10 @@ export async function studioRegression({
   assert.equal((await fetch(api.url + "/api/media/" + imageAsset)).status, 200);
   await button(/^發布歷史/).click();
   await button("載入草稿").click();
-  await page.locator('.studio-notice').filter({hasText:'歷史版本已載入草稿，發布後才會更新網站。'}).waitFor();
+  await page
+    .locator(".studio-notice")
+    .filter({ hasText: "歷史版本已載入草稿，發布後才會更新網站。" })
+    .waitFor();
   await page.getByText("所有修改已儲存", { exact: true }).waitFor();
   await Promise.all([
     page.waitForEvent("load"),

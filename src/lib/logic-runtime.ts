@@ -19,6 +19,25 @@ export function initLogic(
     HTMLElement,
     { hidden: HTMLElement["hidden"]; nodeHidden: boolean }
   >();
+  const motion = new Map<
+    HTMLElement,
+    { x: number; y: number; angle: number }
+  >();
+  const transformable = new Set<HTMLElement>();
+  const motionFor = (el: HTMLElement) => {
+    let value = motion.get(el);
+    if (!value) {
+      const style = getComputedStyle(el),
+        [x, y] = style.translate.split(" ").map(Number.parseFloat);
+      value = {
+        x: Number.isFinite(x) ? x : 0,
+        y: Number.isFinite(y) ? y : 0,
+        angle: Number.parseFloat(style.rotate) || 0,
+      };
+      motion.set(el, value);
+    }
+    return value;
+  };
   const remember = (el: HTMLElement) => {
     if (!styles.has(el)) {
       styles.set(el, el.getAttribute("style"));
@@ -72,6 +91,15 @@ export function initLogic(
           if (signal.aborted) return;
         }
         remember(el);
+        if (
+          ["move", "rotate", "scale", "animate"].includes(b.op) &&
+          !transformable.has(el)
+        ) {
+          // CSS transforms do not affect non-replaced inline text boxes.
+          if (getComputedStyle(el).display === "inline")
+            el.style.display = "inline-block";
+          transformable.add(el);
+        }
         const amount = Number.isFinite(b.amount) ? b.amount : 0;
         if (b.op === "wait") {
           await pause(b.duration, signal);
@@ -106,9 +134,15 @@ export function initLogic(
               Math.min(1e6, (variables.get(b.value) || 0) + amount),
             ),
           );
-        else if (b.op === "move") el.style.translate = `${amount}px 0px`;
-        else if (b.op === "rotate") el.style.rotate = `${amount}deg`;
-        else if (b.op === "scale")
+        else if (b.op === "move") {
+          const value = motionFor(el);
+          value.x = Math.max(-3000, Math.min(3000, value.x + amount));
+          el.style.translate = `${value.x}px ${value.y}px`;
+        } else if (b.op === "rotate") {
+          const value = motionFor(el);
+          value.angle = Math.max(-36000, Math.min(36000, value.angle + amount));
+          el.style.rotate = `${value.angle}deg`;
+        } else if (b.op === "scale")
           el.style.scale = String(Math.max(0.1, Math.min(3, amount / 100)));
         else if (b.op === "opacity")
           el.style.opacity = String(Math.max(0, Math.min(1, amount / 100)));
