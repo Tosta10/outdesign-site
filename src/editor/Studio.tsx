@@ -282,7 +282,7 @@ function Editor({
   }, [deferredContent, preview, assets, page]);
   useEffect(() => {
     if (!content) return;
-    document.title = `${content.settings.name} · 作者模式`;
+    document.title = 'OutDesign';
   }, [content?.settings.name]);
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
