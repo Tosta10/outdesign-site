@@ -1,0 +1,25 @@
+@layer components {
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+  .site-footer .footer-meta {
+    width: 100%;
+  }
+  .footer-meta > span {
+    margin-right: auto;
+  }
+}
+@layer components {
+  [data-element-font] > .hero-copy > h1,
+  [data-element-font] > .mission-body h2,
+  [data-element-font] > .featured-body h2,
+  [data-element-font] > .about-heading h2,
+  [data-element-font] > .contact-main h2,
+  [data-element-font] > .section-heading h2,
+  [data-element-font] > .work-caption h3 {
+    font-size: inherit;
+  }
+}

@@ -12,8 +12,9 @@
 
 1. `supabase/migrations/202610190001_studio.sql`
 2. `supabase/migrations/202610190002_workspace_media.sql`
+3. `supabase/migrations/202610210001_presentation_media.sql`
 
-既有專案只需執行第二個檔案，保留資料與原有函式權限，擴充自訂畫布圖片的原子發布。
+既有專案依序套用尚未執行的 migration，保留資料與函式權限。2026-10-21 版另支援私人品牌素材的原子發布與組裝庫的發布隔離；請先部署新版 `studio-api`（含共用 schema），再部署前端，新增的 presentation／appearance／presets 設定才可儲存。
 
 也可使用 Supabase CLI：
 
@@ -120,14 +121,14 @@ Actions → **Validate and deploy OutDesign** → Run workflow。流程依序安
 ## 7. 日常發布與還原
 
 1. 開啟公開網站 → 頁尾「作者模式」。
-2. 輸入兩組密碼；編輯、上傳、切換風格。
+2. 輸入兩組密碼；編輯、上傳、調整外觀。
 3. 確認「所有修改已儲存」，按「發布」。
 4. 後端建立版本並觸發 GitHub Actions；公開網站在部署成功後更新。
 5. 若建置失敗，保留既有網站，面板提供建置連結與「重試部署」。
 
 若 GitHub 回傳 run ID，編輯器會每 15 秒讀取狀態；未回傳時提供 Actions 紀錄連結，不會假稱部署成功。歷史版本以「載入草稿」還原，確認後再發布。
 
-工作流程採單一 concurrency group；建置另核對內容版本，避免較舊發布覆蓋新版本。若後端無法讀取內容，建置失敗，保留已部署網站。
+正式部署採單一 concurrency group，PR 驗證使用獨立 group；建置另核對內容版本，避免較舊發布覆蓋新版本。若後端無法讀取內容，建置失敗，保留已部署網站。
 
 ## 8. 自訂網域、備份與輪替
 

@@ -1,5 +1,7 @@
 import type { SiteContent } from "../../supabase/functions/_shared/schema";
+import { elementProps } from "../lib/presentation";
 import { assetUrl } from "../lib/content";
+import { EditableText } from "./EditableText";
 import { Icon } from "./Icon";
 import { CanvasHandle } from "./CanvasHandle";
 export type SectionKey = "work" | "notes" | "about" | "attachments" | "contact";
@@ -27,6 +29,15 @@ export function ContentSection({
   selected = "",
   privateAssets = {},
 }: SectionProps & { section: SectionKey }) {
+  const text = (id: string, fallback?: string) => (
+    <EditableText
+      content={c}
+      id={id}
+      editing={editing}
+      selected={selected}
+      fallback={fallback}
+    />
+  );
   const img = (v: string) => assetUrl(v, api, base, privateAssets);
   const edit = (key: string) => (editing ? { "data-edit": key } : {});
   const editClass = (key: string) =>
@@ -38,21 +49,21 @@ export function ContentSection({
         <section
           className="work-section section-shell"
           data-layout="section:work"
+          {...elementProps(c, "work", editing)}
           id="work"
         >
           <CanvasHandle id="section:work" label="作品" editing={editing} />
           <div className="section-heading">
             <div>
-              <p className="eyebrow section-number">01 / SELECTED WORK</p>
+              <p className="eyebrow section-number">
+                {text("work.eyebrow", "01 / SELECTED WORK")}
+              </p>
               <h2>
-                一些作品，<span className="muted">一些探索。</span>
+                {text("work.heading.first")}
+                <span className="muted">{text("work.heading.second")}</span>
               </h2>
             </div>
-            <p className="section-intro">
-              從想法到實作，
-              <br />
-              讓每一個細節都有它的理由。
-            </p>
+            <p className="section-intro">{text("work.description")}</p>
           </div>
           <div className="work-toolbar">
             <div className="filters" role="group" aria-label="作品分類">
@@ -63,14 +74,14 @@ export function ContentSection({
                   aria-pressed={i === 0}
                   className={i === 0 ? "active" : ""}
                 >
-                  {tag}
+                  {text(`filter.${i}`, tag)}
                   {i === 0 && (
                     <span>{String(c.projects.length).padStart(2, "0")}</span>
                   )}
                 </button>
               ))}
             </div>
-            <span className="tiny-label">A COLLECTION OF THINGS I MAKE</span>
+            <span className="tiny-label">{text("work.collection")}</span>
           </div>
           <div className="work-grid">
             {c.projects.map((p, i) => (
@@ -78,6 +89,7 @@ export function ContentSection({
                 key={p.id}
                 className={`work-card work-${p.tone} ${editing && selected === `project:${p.id}` ? "is-selected" : ""}`}
                 data-layout={`project:${p.id}`}
+                {...elementProps(c, `project-${p.id}`, editing)}
                 data-category={p.category}
                 data-edit={editing ? `project:${p.id}` : undefined}
               >
@@ -173,17 +185,21 @@ export function ContentSection({
           <section
             className="notes-section section-shell"
             data-layout="section:notes"
+            {...elementProps(c, "notes", editing)}
             id="notes"
           >
             <CanvasHandle id="section:notes" label="筆記" editing={editing} />
             <div className="section-heading">
               <div>
-                <p className="eyebrow section-number">02 / NOTES & THOUGHTS</p>
+                <p className="eyebrow section-number">
+                  {text("notes.eyebrow", "02 / NOTES & THOUGHTS")}
+                </p>
                 <h2>
-                  想法的<span className="muted">切片。</span>
+                  {text("notes.heading.first")}
+                  <span className="muted">{text("notes.heading.second")}</span>
                 </h2>
               </div>
-              <span className="section-intro">寫下來，讓思考繼續發生。</span>
+              <span className="section-intro">{text("notes.description")}</span>
             </div>
             <div className="notes-list">
               {c.notes.map((n) => (
@@ -191,6 +207,7 @@ export function ContentSection({
                   className="note-wrap"
                   key={n.id}
                   data-layout={`note:${n.id}`}
+                  {...elementProps(c, `note-${n.id}`, editing)}
                 >
                   <CanvasHandle
                     id={`note:${n.id}`}
@@ -236,12 +253,15 @@ export function ContentSection({
         <section
           className={`about-section section-shell${editClass("about")}`}
           data-layout="section:about"
+          {...elementProps(c, "about", editing)}
           id="about"
           {...edit("about")}
         >
           <CanvasHandle id="section:about" label="關於" editing={editing} />
           <div className="about-heading">
-            <p className="eyebrow section-number">03 / A LITTLE ABOUT ME</p>
+            <p className="eyebrow section-number">
+              {text("about.eyebrow", "03 / A LITTLE ABOUT ME")}
+            </p>
             <h2 className="preserve-lines">{c.about.title}</h2>
             <div className="tag-list">
               {c.about.tags.map((tag) => (
@@ -271,7 +291,9 @@ export function ContentSection({
                   </span>
                 </button>
                 <div>
-                  <span className="tiny-label">ON MY FREQUENCY</span>
+                  <span className="tiny-label">
+                    {text("music.eyebrow", "ON MY FREQUENCY")}
+                  </span>
                   <p>{c.music.title}</p>
                   <span className="music-artist">{c.music.artist}</span>
                 </div>
@@ -302,13 +324,17 @@ export function ContentSection({
           <section
             className="attachments section-shell"
             data-layout="section:attachments"
+            {...elementProps(c, "attachments", editing)}
+            data-edit={editing ? "attachments" : undefined}
           >
             <CanvasHandle
               id="section:attachments"
               label="附件"
               editing={editing}
             />
-            <p className="eyebrow">RESOURCES / 下載附件</p>
+            <p className="eyebrow">
+              {text("resources.eyebrow", "RESOURCES / 下載附件")}
+            </p>
             {c.attachments.map((a) => (
               <a
                 key={a.id}
@@ -332,12 +358,15 @@ export function ContentSection({
         <section
           className={`contact-section section-shell${editClass("contact")}`}
           data-layout="section:contact"
+          {...elementProps(c, "contact", editing)}
           id="contact"
           {...edit("contact")}
         >
           <CanvasHandle id="section:contact" label="聯絡" editing={editing} />
           <div className="contact-top">
-            <p className="eyebrow section-number">04 / LET'S MAKE SOMETHING</p>
+            <p className="eyebrow section-number">
+              {text("contact.eyebrow", "04 / LET'S MAKE SOMETHING")}
+            </p>
           </div>
           <div className="contact-main">
             <h2 className="preserve-lines">{c.contact.headline}</h2>
@@ -369,7 +398,7 @@ export function ContentSection({
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  GitHub ↗
+                  {text("contact.github", "GitHub ↗")}
                 </a>
               )}
               {c.contact.instagram && (
@@ -378,7 +407,7 @@ export function ContentSection({
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  Instagram ↗
+                  {text("contact.instagram", "Instagram ↗")}
                 </a>
               )}
             </div>

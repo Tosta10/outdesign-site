@@ -1,3 +1,5 @@
+import { AppearanceFields } from "./AppearanceFields";
+import { AssemblyPanel } from "./AssemblyPanel";
 import { useState } from "react";
 import { createCanvasNode, descendants } from "../lib/workspace";
 import type {
@@ -133,41 +135,82 @@ export function WorkspacePanel({
     });
   return (
     <div className="advanced-panel layout-properties">
-      <h3>新增圖層</h3>
-      <p className="panel-help">
-        選取面板後新增的內容會放進該面板。自由定位支援拖曳與右下角縮放；手機自動改為閱讀順序。
-      </p>
-      <label className="advanced-check">
-        <input
-          type="checkbox"
-          checked={addToRoot}
-          onChange={(e) => setAddToRoot(e.target.checked)}
-        />
-        新增至頁面最外層
-      </label>
-      <div className="node-add-grid">
-        {(
-          [
-            ["frame", "新增面板"],
-            ["text", "新增文字"],
-            ["image", "新增圖片"],
-            ["link", "新增連結"],
-            ["divider", "新增分隔線"],
-          ] as const
-        ).map(([type, label]) => (
-          <button
-            key={type}
-            className="panel-secondary"
-            disabled={nodes.length >= 100}
-            onClick={() => add(type)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <details className="add-node-tools" open={!node}>
+        <summary>{node ? "加入子積木" : "新增基本積木"}</summary>
+        <h3>新增圖層</h3>
+        <p className="panel-help">
+          選取面板後新增的內容會放進該面板。自由定位支援拖曳與右下角縮放；手機自動改為閱讀順序。
+        </p>
+        <label className="advanced-check">
+          <input
+            type="checkbox"
+            checked={addToRoot}
+            onChange={(e) => setAddToRoot(e.target.checked)}
+          />
+          新增至頁面最外層
+        </label>
+        <div className="node-add-grid">
+          {(
+            [
+              ["frame", "新增面板"],
+              ["text", "新增文字"],
+              ["image", "新增圖片"],
+              ["link", "新增連結"],
+              ["divider", "新增分隔線"],
+            ] as const
+          ).map(([type, label]) => (
+            <button
+              key={type}
+              className="panel-secondary"
+              disabled={nodes.length >= 100}
+              onClick={() => add(type)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </details>
       {node && (
         <>
           <h3>圖層屬性 · {node.name}</h3>
+          <button
+            className="panel-danger"
+            disabled={node.locked}
+            onClick={() => {
+              const ids = new Set([node.id, ...descendants(nodes, node.id)]);
+              update((next) => {
+                next.workspace!.nodes = next.workspace!.nodes.filter(
+                  (item) => !ids.has(item.id),
+                );
+              });
+              select(node.parent ? `node:${node.parent}` : "settings");
+            }}
+          >
+            刪除此{node.type === "frame" ? "面板" : "積木"}（可復原）
+          </button>
+          {node.type === "frame" && (
+            <AssemblyPanel
+              key={node.id}
+              content={content}
+              node={node}
+              update={update}
+            />
+          )}
+          <details>
+            <summary>顏色、邊框與效果</summary>
+            <AppearanceFields
+              values={node.appearance}
+              patch={(values) =>
+                patch({ appearance: { ...node.appearance, ...values } })
+              }
+            />
+            <button
+              className="panel-secondary"
+              onClick={() => patch({ appearance: undefined })}
+            >
+              還原面板外觀
+            </button>
+          </details>
           <label>
             圖層名稱
             <input
@@ -430,20 +473,6 @@ export function WorkspacePanel({
               }}
             >
               複製圖層
-            </button>
-            <button
-              className="panel-danger"
-              onClick={() => {
-                const ids = [node.id, ...descendants(nodes, node.id)];
-                update((next) => {
-                  next.workspace!.nodes = next.workspace!.nodes.filter(
-                    (item) => !ids.includes(item.id),
-                  );
-                });
-                select(node.parent ? `node:${node.parent}` : "settings");
-              }}
-            >
-              刪除圖層與子層
             </button>
           </div>
         </>

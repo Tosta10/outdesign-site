@@ -44,10 +44,16 @@ export async function verifyPassword(
   encoded: string,
 ): Promise<boolean> {
   try {
-    const [algorithm, rounds, salt64, expected64] = encoded.split(":");
+    const parts = encoded.split(":");
+    const [algorithm, rounds, salt64, expected64] = parts;
     const iterations = Number(rounds);
     if (
+      parts.length !== 4 ||
       algorithm !== "pbkdf2-sha256" ||
+      !/^[0-9]{6,7}$/.test(rounds) ||
+      !Number.isInteger(iterations) ||
+      !/^[A-Za-z0-9_-]{32}$/.test(salt64) ||
+      !/^[A-Za-z0-9_-]{43}$/.test(expected64) ||
       iterations < PASSWORD_ITERATIONS ||
       iterations > 1_000_000
     )

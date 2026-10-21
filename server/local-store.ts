@@ -93,9 +93,12 @@ export async function createLocalStore(
     publish: (expected, id) =>
       transaction((s) => {
         if (s.draft.revision !== expected) return null;
+        const published = structuredClone(s.draft.content);
+        // Author-only recipes can contain unfinished content. Keep them private.
+        if (published.workspace) delete published.workspace.presets;
         const version = {
           id,
-          content: s.draft.content,
+          content: published,
           createdAt: new Date().toISOString(),
         };
         s.versions.push(version);
@@ -180,7 +183,10 @@ export async function createLocalStore(
       transaction(async (s) => {
         const media = s.media.find((m) => m.id === id);
         if (!media) return true;
-        if (media.isPublic || collectAssetIds(s.draft.content).includes(id))
+        if (
+          media.isPublic ||
+          collectAssetIds(s.draft.content, true).includes(id)
+        )
           return false;
         await unlink(join(directory, "media", media.path));
         s.media = s.media.filter((m) => m.id !== id);

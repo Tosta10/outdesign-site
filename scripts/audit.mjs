@@ -7,6 +7,7 @@ import lighthouse from "lighthouse";
 import { chromium } from "@playwright/test";
 
 const root = resolve("dist");
+const base = (process.env.BASE_PATH || "/").replace(/\/?$/, "/");
 const mime = {
   ".html": "text/html;charset=utf-8",
   ".js": "application/javascript",
@@ -14,12 +15,18 @@ const mime = {
   ".svg": "image/svg+xml",
   ".wav": "audio/wav",
   ".png": "image/png",
+  ".webp": "image/webp",
+  ".ico": "image/x-icon",
 };
 const server = createServer(async (req, res) => {
   try {
-    const pathname = decodeURIComponent(
+    const requested = decodeURIComponent(
       new URL(req.url, "http://localhost").pathname,
     );
+    const pathname =
+      base !== "/" && requested.startsWith(base)
+        ? "/" + requested.slice(base.length)
+        : requested;
     const file = resolve(
       root,
       "." + (pathname.endsWith("/") ? pathname + "index.html" : pathname),
@@ -45,7 +52,7 @@ const server = createServer(async (req, res) => {
   }
 });
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-const url = `http://127.0.0.1:${server.address().port}/`;
+const url = `http://127.0.0.1:${server.address().port}${base}`;
 const probe = probePort();
 await new Promise((resolve) => probe.listen(0, "127.0.0.1", resolve));
 const debugPort = probe.address().port;

@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { hashPassword } from "../supabase/functions/_shared/security.ts";
-import { credentialsSchema } from "../supabase/functions/_shared/schema.ts";
+import { newCredentialsSchema } from "../supabase/functions/_shared/schema.ts";
 import { secretInput } from "./secret-input.mjs";
 let hashes;
 if (process.argv.includes("--from-local")) {
@@ -10,12 +10,12 @@ if (process.argv.includes("--from-local")) {
   ).passwordHashes;
 } else {
   const password1 = await secretInput(
-    "第一組作者密碼（不顯示，至少 12 字元）：",
+    "第一組作者密碼（不顯示，至少 16 字元）：",
   );
   const password2 = await secretInput(
-    "第二組作者密碼（不顯示，至少 12 字元）：",
+    "第二組作者密碼（不顯示，至少 16 字元）：",
   );
-  credentialsSchema.parse({ password1, password2 });
+  newCredentialsSchema.parse({ password1, password2 });
   if (password1 === password2) throw new Error("請使用兩組不同的密碼");
   hashes = await Promise.all([
     hashPassword(password1),

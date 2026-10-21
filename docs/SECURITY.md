@@ -35,3 +35,20 @@
 ## 部署驗證邊界
 
 本機測試驗證共用 API 與授權邏輯。Supabase 專案未連線時，正式資料庫的 RLS、Storage、Edge Function 與 GitHub 權限仍須在部署後做 smoke test；不能用本機通過取代正式環境驗證。
+
+
+## 2026-10-21 加固與查核
+
+- 新設定／輪替兩組密碼各至少 16 字元且不可相同；既有登入最低長度維持相容，不強制重設。建議使用密碼管理器產生兩組不同的隨機密碼，勿重用其他服務密碼。
+- 密碼雜湊解析會拒絕多餘欄位、非整數／過低／過高迭代、錯誤鹽值或 digest 長度。既有正確的 600,000 次格式不變。
+- GitHub Actions 全部固定為已解析的完整提交 SHA；checkout 不持久保存 credential。建置只讀，只有正式部署 job 能取得 Pages／OIDC 寫入權。
+- PR 執行型別、API／SQL／瀏覽器與建置檢查，不部署 Pages；正式 push／手動發布共用 concurrency，避免相互覆蓋。沒有 pull_request_target、PR 標題／內容直接拼入 shell 或向 PR 傳遞後端秘密。
+- 組裝庫只存於私人草稿，SQL／本機發布均移除 presets；預設中的素材不會被設為公開，刪除素材時仍保護其引用。
+- 共用 schema 驗證新增的色彩、邊框、效果、組裝 ID／名稱／父子結構與數量；即時預覽 iframe 不允許腳本與表單，內容仍由 React 輸出。
+- 依賴掃描 `pnpm audit --prod` 未發現已知漏洞（本次查核時點）；這不等同所有程式碼均無漏洞。
+
+GitHub rulesets 讀取結果為空；branch protection 端點因連線權限回傳 403，因此無法確認分支保護是否啟用。帳號 2FA、secret scanning、環境保護規則及正式 Supabase Secrets 內容未取得，不能宣稱已驗證。建議擁有人在 GitHub 開啟 2FA、秘密掃描，並限制 main／Pages environment 的寫入與核准權。
+
+密碼屬於知識型秘密，兩組不會變成 MFA；弱密碼、釣魚、使用者裝置或伺服器秘密外洩仍可繞過部分防護。此修改提高猜測成本與減少憑證外洩面，不承諾「不可破解」，亦未讀取、重設或更動現有正式密碼。
+
+依據：[OWASP Password Storage](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)、[GitHub Secure use reference](https://docs.github.com/en/actions/reference/security/secure-use)。

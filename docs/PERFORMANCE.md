@@ -1,6 +1,16 @@
 # Step 5：效能與驗證報告
 
-## 實際量測（2026-10-19）
+> 2026-10-21 作者工作區重構，首頁保留原面板，WebGL／水波及相關依賴已移除；下列 2026-10-19 Lighthouse 與初始 JavaScript 數據為舊版歷史紀錄，不能代表目前首頁。新模組與驗證方式見 [STUDIO.md](STUDIO.md)。
+
+## 最新量測（2026-10-21）
+
+以目前正式公開內容建置，使用 `/outdesign-site/` 路徑，在本機執行 Lighthouse 模擬手機：效能 99、Accessibility／Best Practices／SEO 各 100；LCP 約 2.11 秒、CLS 0、TBT 0ms，初始 JavaScript 約 2.9 KB gzip。作者編輯器與 React 僅在開啟作者模式後載入，已無 Three.js／Shader 分包。
+
+99 個積木的編輯壓力測試以 120 次輸入事件量測到兩個 animation frame 的時間，未出現超過 50ms 的長任務。此為本機診斷，並非真實使用者 INP 或所有裝置幀率保證。完整數值見本次 `artifacts/editor-performance.json`。
+
+本次已通過 32 項 Node／真實 migration SQL 測試、Astro／Deno 型別檢查與五尺寸 Playwright 回歸。公開頁及編輯器的 Axe 自動檢查均無 serious／critical 問題，瀏覽器無執行錯誤。已知依賴漏洞掃描及高可信度 Git 憑證樣式掃描未發現問題；不代表完整滲透測試。
+
+## 歷史量測（2026-10-19）
 
 對正式 `dist/` 靜態產物，在本機以 Lighthouse 13.5.0、Edge headless、預設模擬手機設定量測：
 
@@ -24,12 +34,12 @@ pnpm build
 pnpm perf
 ```
 
-Linux／CI 請先 `pnpm exec playwright install --with-deps chromium`。Windows 使用現有 Edge。執行前請將公開建置的 `BASE_PATH` 設為 `/` 供本機量測；正式 Pages 仍使用自己的專案路徑。
+Linux／CI 請先 `pnpm exec playwright install --with-deps chromium`。Windows 使用現有 Edge。稽核伺服器支援 `BASE_PATH`；量測時使用與建置相同的路徑，正式 Pages 使用專案路徑。
 
 ## 已採用的優化
 
 - 公開內容在建置時輸出為完整 HTML。作者編輯器、React runtime、Zod 與編輯器 CSS 在點擊作者入口後才載入。
-- 訪客初始互動只處理分類、原生 dialog、音樂與選單，無持續執行的捲動動畫或全頁 Canvas。傾斜採事件驅動、閒置即停止的 RAF。
+- 訪客互動處理分類、原生 dialog、音樂與選單。首頁不載入 WebGL。傾斜採事件驅動、閒置即停止的 RAF。無全頁 Canvas。
 - 封面圖片指定尺寸、固定比例、lazy loading、非同步解碼；主視覺優先載入。
 - 月面背景為 73 KB WebP，輔以原創小體積 SVG；手機停用背景模糊與透視。音訊 `preload="none"`，由訪客主動播放。
 - 大型上傳圖片在瀏覽器以長邊 1800px、WebP 品質 0.86 最佳化（GIF／AVIF 保留原檔）。

@@ -226,39 +226,13 @@
     letter-spacing: 4px;
     white-space: nowrap;
   }
-  .brand-moon {
-    display: inline-block;
-    width: 21px;
-    height: 21px;
-    border-radius: 50%;
-    background: #ededeb;
-    position: relative;
-    transform: rotate(-32deg);
-    flex-shrink: 0;
-  }
-  .brand-moon::after {
-    content: "";
-    position: absolute;
-    width: 19px;
-    height: 19px;
-    border-radius: 50%;
-    background: var(--color-bg);
-    top: -4px;
-    right: -3px;
-  }
-  .header-caption {
-    font-size: 8px;
-    letter-spacing: 2px;
-    color: #aaa;
-    margin-left: 8px;
-  }
+
   .header-actions {
     margin-left: auto;
     display: flex;
     align-items: center;
     gap: 25px;
   }
-  .header-author,
   .menu-toggle {
     display: flex;
     align-items: center;
@@ -266,17 +240,7 @@
     font-size: 11px;
     min-height: 44px;
   }
-  .header-author {
-    color: #b0b0ac;
-  }
-  .header-author:hover {
-    color: #f4f4ef;
-  }
-  .header-divider {
-    width: 1px;
-    height: 17px;
-    background: #ffffff20;
-  }
+
   .menu-toggle {
     border: 1px solid #ffffff55;
     border-radius: 30px;
@@ -320,14 +284,7 @@
     line-height: 1.95;
     letter-spacing: 0.4px;
   }
-  .hero-explore {
-    display: inline-flex;
-    align-items: center;
-    gap: 16px;
-    margin-top: 26px;
-    font-size: 10px;
-    letter-spacing: 0.6px;
-  }
+
   .circle-arrow {
     width: 43px;
     height: 43px;
@@ -564,41 +521,7 @@
     height: 5px;
     background: #ddd;
   }
-  .page-indicators {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    font-size: 11px;
-    font-family: var(--font-serif);
-  }
-  .page-indicators i {
-    height: 1px;
-    width: 42px;
-    background: #ffffff60;
-  }
-  .hero-signature {
-    font-size: 7px;
-    letter-spacing: 2px;
-    color: #b2b2ad;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .hero-signature i {
-    width: 14px;
-    height: 14px;
-    border: 1px solid #ffffff30;
-    border-radius: 50%;
-    display: inline-grid;
-    place-items: center;
-  }
-  .hero-signature i::after {
-    content: "";
-    width: 4px;
-    height: 4px;
-    background: #ddd;
-    border-radius: 50%;
-  }
+
   .page-intro {
     position: relative;
     padding: 55px 6% 70px;
@@ -670,21 +593,7 @@
     gap: 25px;
     padding-block: 36px;
   }
-  .footer-brand {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    font-size: 16px;
-    letter-spacing: 2px;
-  }
-  .footer-brand .brand-moon {
-    width: 16px;
-    height: 16px;
-  }
-  .footer-brand .brand-moon::after {
-    width: 15px;
-    height: 15px;
-  }
+
   .site-footer p {
     margin-top: 12px;
     font-size: 7px;
@@ -776,8 +685,7 @@
       transform: translateX(0);
     }
   }
-  .drawer-top,
-  .drawer-bottom {
+  .drawer-top {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -830,15 +738,7 @@
     font-size: 8px;
     color: #999992;
   }
-  .drawer-bottom {
-    margin-top: 25px;
-  }
-  .drawer-bottom button {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    min-height: 40px;
-  }
+
   .work-toolbar {
     display: flex;
     align-items: center;
@@ -1258,10 +1158,7 @@
       padding: 0 32px;
       gap: 20px;
     }
-    .header-caption {
-      font-size: 6px;
-      letter-spacing: 1px;
-    }
+
     .hero {
       padding-top: 55px;
       min-height: 680px;
@@ -1303,10 +1200,7 @@
     .featured-body h2 {
       font-size: 17px;
     }
-    .hero-signature {
-      font-size: 6px;
-      letter-spacing: 1px;
-    }
+
     .work-grid {
       gap: 20px;
     }
@@ -1332,11 +1226,7 @@
       letter-spacing: 2px;
       gap: 12px;
     }
-    .header-caption,
-    .header-author,
-    .header-divider {
-      display: none;
-    }
+
     .header-actions {
       gap: 0;
     }
@@ -1381,11 +1271,7 @@
       max-width: 390px;
       margin-top: 20px;
     }
-    .hero-explore {
-      margin-top: 22px;
-      font-size: 9px;
-      gap: 12px;
-    }
+
     .circle-arrow {
       width: 37px;
       height: 37px;
@@ -1448,20 +1334,12 @@
       left: 27px;
       right: 27px;
     }
-    .hero-signature {
-      display: none;
-    }
+
     .scroll-cue {
       font-size: 6px;
       letter-spacing: 1px;
     }
-    .page-indicators {
-      font-size: 10px;
-      gap: 9px;
-    }
-    .page-indicators i {
-      width: 24px;
-    }
+
     .section-shell {
       width: calc(100% - 54px);
     }
@@ -1621,9 +1499,7 @@
     .section-heading h2 {
       font-size: 27px;
     }
-    .header-author {
-      display: none;
-    }
+
     .nav-drawer {
       padding: 25px;
     }

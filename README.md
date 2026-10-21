@@ -1,6 +1,6 @@
 # OutDesign
 
-月面景深、磨砂玻璃與克制虹彩的五頁個人網站，附有前端區塊編輯器、交互設定與 JSON／CSS 代碼工作區。作者輸入 **兩組不同的密碼**，由後端驗證後才可讀取草稿或修改內容。訪客只看到已發布版本。
+月面景深、磨砂玻璃與克制虹彩的五頁個人網站，保留原本首頁卡片並使用新的莫比烏斯品牌圖標。附有工程藍圖積木編輯器、交互設定與右側即時代碼預覽。作者輸入 **兩組不同的密碼**，由後端驗證後才可讀取草稿或修改內容。訪客只看到已發布版本。
 
 ![OutDesign 預覽](docs/preview.png)
 
@@ -13,7 +13,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-開啟 `http://127.0.0.1:4321/`。頁尾按「作者模式」，或按 `Alt+E`。首次使用直接在畫面設定兩組不同、至少 12 個字元的密碼。之後每次輸入這兩組密碼即可登入。關閉或重新整理頁面後需重新登入。
+開啟 `http://127.0.0.1:4321/`。頁尾按「作者模式」，或按 `Alt+E`。首次使用直接在畫面設定兩組不同、至少 16 個字元的密碼。之後每次輸入這兩組密碼即可登入。關閉或重新整理頁面後需重新登入。
 
 Windows 也可直接執行 `start.cmd`；此電腦會自動使用 Codex 已提供的 Node／pnpm 執行環境。
 
@@ -23,8 +23,8 @@ Windows 也可直接執行 `start.cmd`；此電腦會自動使用 Codex 已提�
 
 - 五個靜態頁面：首頁 `/`、作品 `/work/`、筆記 `/journal/`、關於 `/about/`、資源 `/resources/`，搭配右側抽屜導覽。
 - 桌面與手機版；鍵盤導覽、原生 dialog、減少動態設定。
-- 圖層、畫布、屬性面板與浮動工具列；長按拖曳或方向鍵排序作品、筆記與當前分頁區塊，支援復原／重做。
-- Prism／Verdant 墨綠兩種完整視覺組合，舊 Quiet／Luminous 內容自動轉為 Prism。
+- 圖層、畫布、屬性面板、藍色目標提示與可命名重用的組裝；長按拖曳或方向鍵排序作品、筆記與當前分頁區塊，支援復原／重做。
+- 直接調整全站色彩、圓角與面板邊框／陰影／效果；保留舊版設定相容性。
 - 草稿自動儲存、手動儲存、撤銷／重做、JSON 備份與匯入。
 - 圖片、音樂、PDF／ZIP／TXT 上傳；圖片必要時縮至長邊 1800px 並轉 WebP。
 - 明確發布、發布歷史、歷史版本載入草稿、建置失敗重試。
@@ -37,7 +37,7 @@ Windows 也可直接執行 `start.cmd`；此電腦會自動使用 Codex 已提�
 
 完整步驟見 [部署文件](docs/DEPLOYMENT.md)。GitHub Pages 承載靜態網站；Supabase 承載驗證、草稿與檔案。
 
-1. 建立 Supabase 專案，依序套用 `supabase/migrations/` 中的兩個 SQL 檔案。
+1. 建立 Supabase 專案，依序套用 `supabase/migrations/` 中的 SQL 檔案。
 2. 部署 `studio-api` Edge Function，設定兩組密碼雜湊及允許來源。
 3. 將專案放到 GitHub，設定 Pages 的 Source 為 GitHub Actions。
 4. 設定 `PUBLIC_API_URL`、`SITE_URL`、`BASE_PATH` 三個 Repository Variables。
@@ -74,8 +74,12 @@ tests/                 驗證、權限、草稿與檔案安全測試
 .github/workflows/      自動驗證、建置、部署
 ```
 
+作者工作區、積木模式、即時預覽、組裝預設及效能分析見 [工作區說明](docs/STUDIO.md)。
+
 更多：[視覺設計](docs/DESIGN.md) · [安全與資料流程](docs/SECURITY.md) · [部署文件](docs/DEPLOYMENT.md) · [效能檢查](docs/PERFORMANCE.md)
 
 交互與代碼工作區：選擇卡片效果、調整角度與阻尼，查看實際 TypeScript／CSS；以 `content.json` 批次編輯整站或以 `theme.css` 調整型別化視覺變數。任意 JavaScript／HTML 模板仍由 GitHub 原始碼修改。
 
 作者工作區新增可巢狀面板、自由定位與縮放、水平／垂直／網格 Auto Layout、圖層複製／刪除、鎖定／隱藏、8px 吸附與裝置畫布。編輯時封鎖訪客功能，預覽時恢復。左側頁面／圖層自動決定右側屬性；內容、風格、媒體、互動、佈局面板皆提供獨立 JSON 程式碼編輯。
+
+2026-10-21 作者工作區：工程藍圖積木庫、拖放組合、點選內容定位、元素樣式與介面文案編輯，以及展開代碼時的右側即時預覽。正式部署需先更新 studio-api schema 與 presentation media migration，見部署文件。

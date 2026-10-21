@@ -522,93 +522,6 @@
   font-size: 9px;
   color: #8e859b;
 }
-.theme-options {
-  display: flex;
-  flex-direction: column;
-  gap: 11px;
-}
-.theme-option {
-  padding: 13px;
-  border: 1px solid #37353f;
-  background: #111114;
-  border-radius: 9px;
-  display: grid;
-  grid-template-columns: 78px 1fr 20px;
-  grid-template-rows: auto auto;
-  gap: 3px 12px;
-  text-align: left;
-  align-items: center;
-}
-.theme-option.selected {
-  border-color: #a18bbd;
-  background: #221b2b;
-}
-.theme-option > strong {
-  font-size: 13px;
-  font-weight: 400;
-  grid-column: 2;
-  grid-row: 1;
-}
-.theme-option > span:not(.theme-preview) {
-  font-size: 9px;
-  color: #918a9e;
-  grid-column: 2;
-  grid-row: 2;
-}
-.theme-option > svg {
-  grid-column: 3;
-  grid-row: 1/3;
-  color: #c7b3e6;
-}
-.theme-preview {
-  grid-column: 1;
-  grid-row: 1/3;
-  position: relative;
-  height: 49px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  border: 1px solid #3f3948;
-  border-radius: 4px;
-  padding-left: 9px;
-  overflow: hidden;
-  background: #0b0b0d;
-}
-.theme-preview > i {
-  height: 2px;
-  width: 26px;
-  background: #a9a3b5;
-}
-.theme-preview > i:nth-child(2) {
-  width: 21px;
-  background: #68616f;
-}
-.theme-preview > i:nth-child(3) {
-  margin-top: 3px;
-  width: 11px;
-  height: 5px;
-  border-radius: 1px;
-  background: #e2dce8;
-}
-.theme-preview > span {
-  position: absolute;
-  width: 22px;
-  height: 34px;
-  right: 8px;
-  top: 7px;
-  border: 4px solid #aea1c3;
-  border-radius: 50%;
-  transform: rotate(25deg);
-  background: linear-gradient(120deg, #ad9adf33, #d2e5ba33);
-}
-.quiet .theme-preview {
-  filter: grayscale(1);
-}
-.luminous .theme-preview > span {
-  border-color: #d4a4fd;
-  box-shadow: 0 0 12px #b188ff30;
-}
 .import-label {
   cursor: pointer;
 }
@@ -1854,15 +1767,6 @@
 .scoped-code .code-input {
   min-height: 260px;
 }
-.theme-option.verdant .theme-preview {
-  background: #080f0d;
-}
-.theme-option.verdant .theme-preview > span {
-  background: linear-gradient(120deg, #91c4a5, #557e6a);
-}
-.theme-option.verdant {
-  border-color: #91c4a52a;
-}
 @container site (max-width: 760px) {
   .editor-canvas .site .hero {
     display: flex;
@@ -1921,4 +1825,430 @@
 .free-move-handle {
   top: -22px;
   min-height: 22px;
+}
+/* Engineering blueprint: restrained cyan structure, one primary workflow. */
+.editor-shell {
+  --studio-accent: #9bdae9;
+  --studio-line: #284250;
+}
+.studio-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 10px;
+  gap: 4px;
+  border-bottom: 1px solid #ffffff12;
+}
+.studio-modes button {
+  min-height: 36px;
+  font-size: 11px;
+  color: #9aadb8;
+  border: 1px solid transparent;
+  border-radius: 5px;
+}
+.studio-modes [aria-pressed="true"] {
+  color: #c3eff8;
+  background: #17323f;
+  border-color: #315768;
+}
+.selection-path {
+  padding: 0 18px 12px;
+  font:
+    10px/1.7 Consolas,
+    monospace;
+  color: #8fb2c4;
+  overflow-wrap: anywhere;
+}
+.blueprint-caption {
+  font:
+    9px/1.6 Consolas,
+    monospace;
+  color: #a2d0de;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+}
+.block-library {
+  padding: 14px 10px;
+  border-bottom: 1px solid #284250;
+}
+.block-library .panel-help {
+  font-size: 10px;
+  line-height: 1.8;
+}
+.recipe-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 10px 8px;
+  border: 1px solid #2b404c;
+  background: #111e27;
+  border-radius: 6px;
+  margin-top: 9px;
+  text-align: left;
+  cursor: grab;
+}
+.recipe-card:hover {
+  border-color: #9bdae9;
+  background: #17303e;
+}
+.recipe-card strong,
+.recipe-card em,
+.recipe-card small {
+  display: block;
+}
+.recipe-card strong {
+  font-size: 11px;
+  color: #d8e9ed;
+  font-weight: 500;
+}
+.recipe-card small {
+  font:
+    8px Consolas,
+    monospace;
+  color: #76a5bb;
+}
+.recipe-card em {
+  font-size: 9px;
+  color: #9aafb9;
+  font-style: normal;
+}
+.recipe-wireframe {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #78b9cd80;
+  padding: 6px;
+  height: 48px;
+}
+.recipe-wireframe i {
+  border: 1px solid #9bdae950;
+  min-height: 3px;
+}
+.wire-split,
+.wire-columns {
+  grid-template-columns: repeat(2, 1fr);
+}
+.wire-columns {
+  grid-template-columns: repeat(3, 1fr);
+}
+.wire-panel {
+  border-radius: 7px;
+  background: radial-gradient(ellipse, #9bddeb20, transparent);
+}
+.blueprint-mode .editor-canvas {
+  background-color: #0c151e;
+  background-image:
+    linear-gradient(#69accd0b 1px, transparent 1px),
+    linear-gradient(90deg, #69accd0b 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.blueprint-mode .canvas-stage {
+  box-shadow: 0 0 0 1px #6bb8cf3d;
+}
+.blueprint-mode .canvas-node {
+  outline: 1px dashed #78b9cd66;
+  outline-offset: 2px;
+}
+.blueprint-mode .canvas-node::after {
+  content: attr(data-node-name);
+  position: absolute;
+  right: 8px;
+  top: 5px;
+  font:
+    8px Consolas,
+    monospace;
+  color: #8ab6c5;
+  pointer-events: none;
+}
+.blueprint-mode .canvas-node.is-selected {
+  outline: 2px solid #9bdae9;
+}
+/* Match the same innermost data-edit target used by Studio's click handler.
+   :has prevents a nested label/card from lighting up all its ancestors. */
+@media (hover: hover) {
+  .editor-canvas
+    .site[data-editing="true"]
+    :where(
+      [data-edit]:hover:not(
+          :has(
+            [data-edit]:hover,
+            [data-drag-handle]:hover,
+            [data-delete-node]:hover,
+            [data-free-move]:hover,
+            [data-free-resize]:hover
+          )
+        )
+    ) {
+    outline: 2px dashed #4da3ff;
+    outline-offset: 3px;
+    cursor: crosshair;
+  }
+}
+.editor-canvas .site[data-editing="true"] .is-selected {
+  outline: 2px solid #2684ff;
+  outline-offset: 3px;
+}
+.editor-panel .advanced-panel input:not([type="checkbox"]):not([type="range"]),
+.editor-panel .advanced-panel textarea,
+.editor-panel .advanced-panel select {
+  max-width: 100%;
+  color: #e4edf0;
+  background: #11181e;
+  border: 1px solid #334653;
+  border-radius: 5px;
+  padding: 9px;
+}
+.code-source-pane {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  align-content: start;
+}
+.code-expanded {
+  display: grid;
+  grid-template-columns: minmax(300px, 1.2fr) minmax(300px, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 24px;
+  background: #101922;
+  border-color: #35515f;
+  overflow: hidden;
+}
+.code-expanded .code-source-pane {
+  overflow: auto;
+  padding-right: 10px;
+  grid-template-rows: auto auto auto auto minmax(260px, 1fr) auto auto;
+}
+.code-expanded .code-input {
+  height: 100%;
+  min-height: 320px;
+  resize: none;
+}
+.code-live-preview {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-left: 1px solid #35515f;
+  padding-left: 24px;
+  overflow: hidden;
+}
+.preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  font-size: 12px;
+}
+.preview-heading span {
+  font-size: 10px;
+  color: #99b8c6;
+}
+.preview-controls {
+  display: flex;
+  gap: 18px;
+  margin-bottom: 14px;
+  font-size: 10px;
+}
+.preview-controls label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.preview-validation {
+  font-size: 10px;
+  line-height: 1.7;
+  color: #e3bd98;
+  max-height: 80px;
+  overflow: auto;
+  margin-bottom: 10px;
+}
+.code-preview-viewport {
+  position: relative;
+  flex: 1;
+  min-height: 300px;
+  overflow: hidden;
+  border: 1px solid #35515f;
+  background: #070c10;
+}
+.code-preview-viewport iframe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: 0;
+  transform-origin: top left;
+  max-width: none;
+}
+@media (max-width: 900px) {
+  .code-expanded {
+    grid-template-columns: 1fr;
+    overflow: auto;
+    grid-template-rows: auto 550px;
+  }
+  .code-live-preview {
+    border-left: 0;
+    border-top: 1px solid #35515f;
+    padding: 20px 0 0;
+  }
+  .code-expanded .code-source-pane {
+    overflow: visible;
+  }
+  .code-expanded .code-input {
+    height: 380px;
+  }
+}
+.canvas-toolbar {
+  display: none;
+}
+@media (max-width: 1000px) {
+  .canvas-toolbar {
+    display: flex;
+  }
+}
+.code-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.code-heading .panel-secondary {
+  width: auto;
+  min-width: 112px;
+}
+.code-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.code-actions .panel-primary,
+.code-actions .panel-secondary {
+  width: auto;
+  min-height: 38px;
+  font-size: 11px;
+}
+.preview-controls label {
+  white-space: nowrap;
+}
+.editor-panel .preview-controls select {
+  width: auto;
+}
+.element-style-panel,
+.add-node-tools {
+  border: 1px solid #2b404c;
+  border-radius: 6px;
+  padding: 12px;
+  margin-block: 16px;
+}
+.element-style-panel summary,
+.add-node-tools summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: #b7d1db;
+}
+.add-node-tools .node-add-grid {
+  gap: 7px;
+  margin-top: 12px;
+}
+.add-node-tools .node-add-grid button {
+  padding: 7px;
+  min-height: 36px;
+}
+.add-node-tools h3 {
+  display: none;
+}
+.add-node-tools .panel-help {
+  margin-top: 12px;
+}
+.editor-shell[data-preview-pending="true"] .canvas-view-tools::after {
+  content: "同步畫布";
+  color: #99c8d4;
+  font-size: 9px;
+}
+.canvas-delete {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  z-index: 8;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #f3aaa855;
+  border-radius: 6px;
+  background: #281b1b;
+  color: #ffd0cf;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.assembly-panel,
+.appearance-fields {
+  display: grid;
+  gap: 12px;
+}
+.assembly-panel {
+  padding: 16px 0;
+  border-bottom: 1px solid #ffffff16;
+}
+.assembly-panel summary,
+.layout-properties details summary {
+  cursor: pointer;
+  padding: 10px 0;
+}
+.saved-assembly {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0;
+}
+.saved-assembly > .panel-secondary {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
+}
+.saved-assembly small {
+  color: #a0a09f;
+  font-size: 10px;
+}
+.assembly-delete {
+  width: 32px;
+  border: 1px solid #ffffff20;
+  background: none;
+  color: #ffb9b5;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.code-heading button[aria-label="關閉代碼工作區"] {
+  min-width: 38px;
+  min-height: 38px;
+  font-size: 18px;
+}
+
+.code-expanded .code-close {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  z-index: 4;
+  width: 38px;
+  height: 38px;
+}
+.code-expanded .preview-heading {
+  padding-right: 44px;
+}
+.saved-assembly > .panel-secondary {
+  display: grid;
+  gap: 4px;
+  justify-content: stretch;
+  min-width: 0;
+  padding: 8px;
+  overflow-wrap: anywhere;
+}
+.saved-assembly .assembly-delete {
+  width: 26px;
+  flex-shrink: 0;
+  align-self: center;
+  height: 32px;
+}
+.layout-properties > .panel-danger {
+  min-height: 36px;
+  font-size: 11px;
+  text-align: left;
 }

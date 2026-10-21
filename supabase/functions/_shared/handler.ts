@@ -4,6 +4,7 @@ import {
   collectAssetIds,
   contentSchema,
   credentialsSchema,
+  newCredentialsSchema,
   uploadTypes,
 } from "./schema.ts";
 import { initialContent } from "./seed.ts";
@@ -135,7 +136,7 @@ export function createHandler(store: StudioStore, config: ApiConfig) {
       if (route === "/setup" && request.method === "POST") {
         if (!config.local || !config.bootstrap || hashes)
           throw new ApiError(404, "找不到此功能");
-        const credentials = credentialsSchema.parse(await jsonBody(request));
+        const credentials = newCredentialsSchema.parse(await jsonBody(request));
         if (credentials.password1 === credentials.password2)
           throw new ApiError(400, "請使用兩組不同的密碼");
         const pair = (await Promise.all([

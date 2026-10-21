@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import type { CanvasNode } from "../../supabase/functions/_shared/schema";
 import type { SectionProps } from "./ContentSection";
 import { CanvasHandle } from "./CanvasHandle";
+import { appearanceStyle } from "../lib/presentation";
 import { assetUrl } from "../lib/content";
 
 export function CanvasPanels({
@@ -16,10 +17,18 @@ export function CanvasPanels({
   const nodes = (content.workspace?.nodes || []).filter(
     (node) => node.page === page,
   );
+  // Index once: nested rendering stays O(n), instead of scanning all nodes per child.
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const byParent = new Map<string | null, CanvasNode[]>();
+  for (const node of nodes) {
+    const siblings = byParent.get(node.parent) || [];
+    siblings.push(node);
+    byParent.set(node.parent, siblings);
+  }
   const render = (node: CanvasNode) => {
-    const parent = nodes.find((item) => item.id === node.parent);
+    const parent = node.parent ? byId.get(node.parent) : undefined;
     const free = parent?.layout === "free";
-    const children = nodes.filter((item) => item.parent === node.id);
+    const children = byParent.get(node.id) || [];
     const style: CSSProperties = {
       "--node-x": `${node.x}%`,
       "--node-y": `${node.y}px`,
@@ -30,6 +39,7 @@ export function CanvasPanels({
       "--node-cols": node.columns,
       "--node-radius": `${node.radius}px`,
       "--node-font": `${node.fontSize}px`,
+      ...appearanceStyle(node.appearance),
       opacity: node.opacity,
       alignItems: node.align,
       textAlign:
@@ -45,10 +55,23 @@ export function CanvasPanels({
         className={`canvas-node node-${node.type} node-flow-${node.layout} node-fill-${node.fill} node-size-${node.sizing} ${free ? "node-free" : ""} ${node.border ? "node-border" : ""} ${node.hidden ? "node-hidden" : ""} ${editing ? "editable" : ""} ${selected === `node:${node.id}` ? "is-selected" : ""}`}
         style={style}
         data-node-id={node.id}
+        data-node-name={`${node.name} · ${Math.round(node.width)}×${Math.round(node.height)}`}
         data-layout={`node:${node.id}`}
         data-edit={editing ? `node:${node.id}` : undefined}
         data-locked={node.locked}
+        data-optical-card={node.type === "frame" ? true : undefined}
+        data-effect={node.appearance?.effect}
       >
+        {editing && !node.locked && selected === `node:${node.id}` && (
+          <button
+            className="canvas-delete"
+            data-delete-node={node.id}
+            aria-label={`刪除面板：${node.name}`}
+            title="刪除面板（可復原）"
+          >
+            ×
+          </button>
+        )}
         {editing &&
           !node.locked &&
           (free ? (
@@ -109,9 +132,9 @@ export function CanvasPanels({
       </div>
     );
   };
-  return nodes.some((node) => !node.parent) ? (
+  return byParent.has(null) ? (
     <div className="custom-panels section-shell" data-custom-panels>
-      {nodes.filter((node) => !node.parent).map(render)}
+      {byParent.get(null)!.map(render)}
     </div>
   ) : null;
 }

@@ -1,5 +1,11 @@
 # 素材與生成紀錄
 
+## 2026-10-21 品牌更新
+
+品牌圖標由使用者提供的「黑白虹彩交織莫比烏斯環.png」等比例縮圖，未生成或重新繪製。輸出為 `public/assets/outdesign-mark.webp`（192px）、`public/favicon-32.png`、`public/favicon.ico`（16／32／48／64px）與 `public/apple-touch-icon.png`（192px）。舊月牙 favicon 已移除。此使用者提供素材不屬於下方原創生成素材清單。
+
+## 月面背景
+
 `public/assets/lunar-landscape.webp` 為本次透過內建 imagegen 工具生成的原創背景，並以 Sharp 轉為 WebP（品質 80，最大寬 1920px，輸出 73,166 bytes）。生成原檔保留於本機 Codex 圖片目錄，網站資產本身完整保存在此專案。
 
 示例圖僅用於分析版面與氣氛，未作為網頁截圖或背景直接發布。所有可讀文字與互動元素均以 HTML/CSS 實作。

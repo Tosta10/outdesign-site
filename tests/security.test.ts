@@ -12,6 +12,8 @@ import {
 } from "../supabase/functions/_shared/security.ts";
 import {
   contentSchema,
+  credentialsSchema,
+  newCredentialsSchema,
   safeUrl,
 } from "../supabase/functions/_shared/schema.ts";
 import { initialContent } from "../supabase/functions/_shared/seed.ts";
@@ -104,6 +106,19 @@ test("password storage uses salted PBKDF2 and rejects a wrong password", async (
     await verifyPassword(first, "pbkdf2-sha256:1:invalid:invalid"),
     false,
   );
+});
+test("malformed or weakened password hash configuration fails closed", async () => {
+  const [algorithm, rounds, salt, digest] = hashes[0].split(":");
+  for (const encoded of [
+    hashes[0] + ":extra",
+    `${algorithm}:600000.5:${salt}:${digest}`,
+    `${algorithm}:NaN:${salt}:${digest}`,
+    `${algorithm}:${rounds}:abc:${digest}`,
+    `${algorithm}:${rounds}:${salt}:abc`,
+    `${algorithm}:599999:${salt}:${digest}`,
+    `${algorithm}:9999999:${salt}:${digest}`,
+  ])
+    assert.equal(await verifyPassword(first, encoded), false);
 });
 test("either wrong password denies login; both correct issue a server-side session", async (t) => {
   const f = await fixture(t);
@@ -369,5 +384,73 @@ test("layout keeps legacy content valid and accepts each section exactly once", 
       layout: { sections: [...sections.slice(0, 4), "admin"] },
     }).success,
     false,
+  );
+});
+
+test("new passwords are stronger without rejecting existing login credentials", () => {
+  const old = { password1: "older-pass-12", password2: "second-old-12" };
+  assert.equal(credentialsSchema.safeParse(old).success, true);
+  assert.equal(newCredentialsSchema.safeParse(old).success, false);
+  assert.equal(
+    newCredentialsSchema.safeParse({ password1: first, password2: first })
+      .success,
+    false,
+  );
+  assert.equal(
+    newCredentialsSchema.safeParse({ password1: first, password2: second })
+      .success,
+    true,
+  );
+});
+test("saved assemblies stay private on publication and retain their private media", async (t) => {
+  const f = await fixture(t),
+    token = await f.login();
+  const { createCanvasNode } = await import("../src/lib/workspace.ts");
+  const { saveAssembly } = await import("../src/lib/assemblies.ts");
+  const frame = createCanvasNode("home", "frame"),
+    image = createCanvasNode("home", "image", frame.id),
+    id = crypto.randomUUID();
+  image.image = `asset:${id}`;
+  await f.store.putMedia(
+    {
+      id,
+      name: "private.webp",
+      mime: "image/webp",
+      size: 12,
+      kind: "image",
+      path: `${id}.webp`,
+      isPublic: false,
+      createdAt: new Date().toISOString(),
+    },
+    new Uint8Array(12),
+  );
+  const preset = saveAssembly([frame, image], frame.id, "尚未公開的組裝");
+  const draft = await f.store.getDraft();
+  const content = {
+    ...draft.content,
+    workspace: { nodes: [], presets: [preset] },
+  };
+  const saved = await f.request(
+    "/draft",
+    "PATCH",
+    { content, revision: draft.revision },
+    token,
+  );
+  assert.equal(saved.status, 200);
+  const revision = (await saved.json()).revision;
+  assert.equal(
+    (await f.request("/publish", "POST", { revision }, token)).status,
+    200,
+  );
+  const published = await (await f.request("/public")).json();
+  assert.equal(published.content.workspace.presets, undefined);
+  assert.equal(
+    (await f.store.getDraft()).content.workspace?.presets?.length,
+    1,
+  );
+  assert.equal((await f.request(`/media/${id}`)).status, 401);
+  assert.equal(
+    (await f.request(`/media/${id}`, "DELETE", undefined, token)).status,
+    409,
   );
 });
