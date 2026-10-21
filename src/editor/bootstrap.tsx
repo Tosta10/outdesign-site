@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { Studio } from "./Studio";
 import "../styles/editor.css";
+import "../styles/studio-workspaces.css";
 
 let open = false;
 export async function openStudio() {

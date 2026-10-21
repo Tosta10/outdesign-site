@@ -3,6 +3,22 @@ export function initViewer(root: Document | HTMLElement): () => void {
   if (root.querySelector('.site[data-editing="true"]')) return () => {};
   const disposeEffects = initEffects(root);
   const abort = new AbortController();
+  let disposeLogic: (() => void) | undefined;
+  const logicSource = root.querySelector("[data-site-logic]")?.textContent;
+  if (logicSource)
+    import("./logic-runtime")
+      .then(({ initLogic }) => {
+        if (!abort.signal.aborted) {
+          try {
+            disposeLogic = initLogic(root, JSON.parse(logicSource));
+          } catch {
+            /* Keep content usable if a saved script is invalid. */
+          }
+        }
+      })
+      .catch(() => {
+        /* A failed optional logic chunk must not block navigation. */
+      });
   const listen = (element: EventTarget, type: string, handler: EventListener) =>
     element.addEventListener(type, handler, { signal: abort.signal });
   const menu = root.querySelector<HTMLDialogElement>(".nav-drawer");
@@ -111,6 +127,7 @@ export function initViewer(root: Document | HTMLElement): () => void {
   }
   return () => {
     disposeEffects();
+    disposeLogic?.();
     abort.abort();
     audio?.pause();
     if (menu?.open) menu.close();

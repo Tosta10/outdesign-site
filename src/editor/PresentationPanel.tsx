@@ -21,7 +21,13 @@ export function PresentationPanel({
         文字內容
         <textarea
           aria-label="介面文字內容"
-          value={content.presentation?.copy?.[key] ?? copyDefaults[key] ?? ""}
+          value={
+            content.presentation?.copy?.[key] ??
+            copyDefaults[key] ??
+            (key === "footer.copyright"
+              ? `© ${new Date().getUTCFullYear()} ${content.settings.name}`
+              : "")
+          }
           maxLength={500}
           onChange={(e) =>
             update((next) => {

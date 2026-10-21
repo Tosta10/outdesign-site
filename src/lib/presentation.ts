@@ -87,20 +87,74 @@ export function elementProps(
   hidden?: boolean;
   "data-element-font"?: boolean;
   "data-effect"?: string;
+  "data-element-key": string;
+  "data-edit"?: string;
+  "data-layer-locked"?: boolean;
+  "data-layer-deleted"?: boolean;
+  "data-layer-hidden"?: boolean;
+  "data-layer-positioned"?: boolean;
 } {
   const values = content.presentation?.elements?.[key];
-  if (!values) return {};
-  const { radius, hidden, borderColor, borderWidth, shadow, effect, ...style } =
-    values;
+  const {
+    radius,
+    hidden,
+    deleted,
+    locked,
+    name,
+    x,
+    y,
+    rotation,
+    width,
+    height,
+    zIndex,
+    order,
+    borderColor,
+    borderWidth,
+    shadow,
+    effect,
+    ...style
+  } = values || {};
+  const positioned =
+    x !== undefined || y !== undefined || rotation !== undefined;
   return {
-    style: {
-      ...style,
-      ...appearanceStyle({ borderColor, borderWidth, shadow }),
-      borderRadius: radius,
-      opacity: editing && hidden ? 0.35 : style.opacity,
-    },
+    style: Object.fromEntries(
+      Object.entries({
+        ...style,
+        ...appearanceStyle({ borderColor, borderWidth, shadow }),
+        borderRadius: radius,
+        opacity: editing && hidden ? 0.35 : style.opacity,
+        ...(deleted ? { display: "none" } : {}),
+        ...(positioned
+          ? {
+              "--layer-x": `${x || 0}px`,
+              "--layer-y": `${y || 0}px`,
+              "--layer-rotation": `${rotation || 0}deg`,
+            }
+          : {}),
+        ...(width !== undefined ? { width, maxWidth: "100%" } : {}),
+        ...(height !== undefined ? { height } : {}),
+        ...(zIndex !== undefined ? { zIndex } : {}),
+        order,
+      }).filter(([, value]) => value !== undefined),
+    ) as CSSProperties,
     hidden: !editing && hidden,
     "data-effect": effect,
     "data-element-font": style.fontSize !== undefined || undefined,
+    "data-element-key": key,
+    "data-edit": editing ? `element:${key}` : undefined,
+    "data-layer-locked": locked || undefined,
+    "data-layer-deleted": deleted || undefined,
+    "data-layer-hidden": hidden || undefined,
+    "data-layer-positioned": positioned || undefined,
   };
+}
+export function pageTitle(content: SiteContent, page: string): string {
+  return (
+    content.settings.pageTitles?.[
+      page as keyof NonNullable<SiteContent["settings"]["pageTitles"]>
+    ] ||
+    (page === "home"
+      ? "OutDesign"
+      : `${({ work: "作品", journal: "筆記", about: "關於", resources: "資源" } as Record<string, string>)[page]} — ${content.settings.name}`)
+  );
 }

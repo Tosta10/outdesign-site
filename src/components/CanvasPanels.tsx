@@ -1,8 +1,7 @@
 import type { CSSProperties } from "react";
 import type { CanvasNode } from "../../supabase/functions/_shared/schema";
 import type { SectionProps } from "./ContentSection";
-import { CanvasHandle } from "./CanvasHandle";
-import { appearanceStyle } from "../lib/presentation";
+import { appearanceStyle, elementProps } from "../lib/presentation";
 import { assetUrl } from "../lib/content";
 
 export function CanvasPanels({
@@ -53,7 +52,11 @@ export function CanvasPanels({
       <div
         key={node.id}
         className={`canvas-node node-${node.type} node-flow-${node.layout} node-fill-${node.fill} node-size-${node.sizing} ${free ? "node-free" : ""} ${node.border ? "node-border" : ""} ${node.hidden ? "node-hidden" : ""} ${editing ? "editable" : ""} ${selected === `node:${node.id}` ? "is-selected" : ""}`}
-        style={style}
+        {...elementProps(content, `node-${node.id}`, editing)}
+        style={{
+          ...style,
+          ...elementProps(content, `node-${node.id}`, editing).style,
+        }}
         data-node-id={node.id}
         data-node-name={`${node.name} · ${Math.round(node.width)}×${Math.round(node.height)}`}
         data-layout={`node:${node.id}`}
@@ -62,30 +65,16 @@ export function CanvasPanels({
         data-optical-card={node.type === "frame" ? true : undefined}
         data-effect={node.appearance?.effect}
       >
-        {editing && !node.locked && selected === `node:${node.id}` && (
+        {editing && !node.locked && free && (
           <button
-            className="canvas-delete"
-            data-delete-node={node.id}
-            aria-label={`刪除面板：${node.name}`}
-            title="刪除面板（可復原）"
+            className="free-move-handle"
+            data-free-move={node.id}
+            aria-label={`移動圖層：${node.name}`}
+            title="拖曳移動；方向鍵微調"
           >
-            ×
+            ⠿ {node.name}
           </button>
         )}
-        {editing &&
-          !node.locked &&
-          (free ? (
-            <button
-              className="free-move-handle"
-              data-free-move={node.id}
-              aria-label={`移動圖層：${node.name}`}
-              title="拖曳移動；方向鍵微調"
-            >
-              ⠿ {node.name}
-            </button>
-          ) : (
-            <CanvasHandle id={`node:${node.id}`} label={node.name} editing />
-          ))}
         {node.type === "frame" ? (
           <>
             {editing && children.length === 0 && (

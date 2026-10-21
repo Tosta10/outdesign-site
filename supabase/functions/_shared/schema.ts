@@ -204,9 +204,102 @@ export const assemblySchema = z
       });
   });
 export type Assembly = z.infer<typeof assemblySchema>;
+// A bounded, declarative language. No arbitrary JavaScript or unbounded loops.
+export const logicOperation = z.enum([
+  "move",
+  "rotate",
+  "scale",
+  "opacity",
+  "show",
+  "hide",
+  "toggle",
+  "color",
+  "text",
+  "link",
+  "wait",
+  "animate",
+  "repeat",
+  "if-width",
+  "set-variable",
+  "add-variable",
+  "if-variable",
+]);
+export type LogicBlock = {
+  id: string;
+  op: z.infer<typeof logicOperation>;
+  value: string;
+  amount: number;
+  duration: number;
+  children: LogicBlock[];
+  otherwise: LogicBlock[];
+};
+const logicBlockSchema: z.ZodType<LogicBlock> = z.lazy(() =>
+  z
+    .object({
+      id: z.uuid(),
+      op: logicOperation,
+      value: text(500),
+      amount: z.number().min(-3000).max(3000),
+      duration: z.number().min(0).max(5),
+      children: z.array(logicBlockSchema).max(30),
+      otherwise: z.array(logicBlockSchema).max(30),
+    })
+    .strict(),
+);
+export const logicScriptSchema = z
+  .object({
+    id: z.uuid(),
+    page: canvasPage,
+    name: text(60).min(1),
+    target: z.string().regex(/^[a-zA-Z0-9.:-]{1,100}$/),
+    event: z.enum(["load", "click", "hover", "leave", "visible", "key"]),
+    key: text(20),
+    x: z.number().min(0).max(4000),
+    y: z.number().min(0).max(4000),
+    enabled: z.boolean(),
+    blocks: z.array(logicBlockSchema).max(30),
+  })
+  .strict()
+  .superRefine((script, ctx) => {
+    let count = 0;
+    const ids = new Set<string>();
+    const walk = (blocks: LogicBlock[], depth: number) => {
+      for (const b of blocks) {
+        count++;
+        if (ids.has(b.id) || depth > 5 || count > 100)
+          ctx.addIssue({
+            code: "custom",
+            message: "邏輯積木不可重複、超過五層或 100 個",
+          });
+        ids.add(b.id);
+        if (
+          (b.op === "link" && !externalUrl.safeParse(b.value).success) ||
+          (b.op === "color" && !/^#[0-9a-f]{6}$/i.test(b.value))
+        )
+          ctx.addIssue({
+            code: "custom",
+            message: "請使用 HTTPS 連結或六位色碼",
+          });
+        if (depth <= 5) {
+          walk(b.children, depth + 1);
+          walk(b.otherwise, depth + 1);
+        }
+      }
+    };
+    walk(script.blocks, 1);
+  });
+export type LogicScript = z.infer<typeof logicScriptSchema>;
 export const workspaceSchema = z
   .object({
     nodes: z.array(canvasNodeSchema).max(100),
+    scripts: z
+      .array(logicScriptSchema)
+      .max(24)
+      .refine(
+        (items) => new Set(items.map((s) => s.id)).size === items.length,
+        "腳本 ID 不可重複",
+      )
+      .optional(),
     presets: z
       .array(assemblySchema)
       .max(8)
@@ -240,6 +333,7 @@ export const contentSchema = z
       .object({
         name: text(60).min(1),
         siteTitle: text(100).min(1),
+        pageTitles: z.record(canvasPage, text(100).min(1)).optional(),
         description: text(220),
         theme: z.preprocess(
           (value) =>
@@ -298,10 +392,20 @@ export const contentSchema = z
                 fontSize: z.number().min(8).max(120).optional(),
                 opacity: z.number().min(0.1).max(1).optional(),
                 hidden: z.boolean().optional(),
+                deleted: z.boolean().optional(),
+                locked: z.boolean().optional(),
+                name: text(60).optional(),
+                x: z.number().min(-3000).max(3000).optional(),
+                y: z.number().min(-3000).max(3000).optional(),
+                width: z.number().min(16).max(3000).optional(),
+                height: z.number().min(16).max(3000).optional(),
+                rotation: z.number().min(-360).max(360).optional(),
+                zIndex: z.number().int().min(-100).max(999).optional(),
+                order: z.number().int().min(-200).max(200).optional(),
               })
               .strict(),
           )
-          .refine((v) => Object.keys(v).length <= 180)
+          .refine((v) => Object.keys(v).length <= 600)
           .optional(),
         copy: z
           .record(z.string().regex(/^[a-z][a-zA-Z0-9.-]{0,79}$/), text(500))
@@ -325,6 +429,7 @@ export const contentSchema = z
 export type SiteContent = z.infer<typeof contentSchema>;
 export type Project = z.infer<typeof projectSchema>;
 export type Selection =
+  | `element:${string}`
   | `copy:${string}`
   | "hero"
   | "about"
