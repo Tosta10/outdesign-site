@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   contentSchema,
   defaultDesign,
@@ -58,18 +58,24 @@ export function ScopedCode({
   apply: (content: SiteContent) => void;
   onDirty: (dirty: boolean) => void;
 }) {
-  const live = JSON.stringify(scoped(content, scope, page), null, 2);
   const [open, setOpen] = useState(false),
-    [source, setSource] = useState(live),
-    [dirty, setDirty] = useState(false),
+    [dirty, setDirty] = useState(false);
+  const live = useMemo(
+    () =>
+      open || dirty
+        ? JSON.stringify(scoped(content, scope, page), null, 2)
+        : "",
+    [content, scope, page, open, dirty],
+  );
+  const [source, setSource] = useState(""),
     [message, setMessage] = useState("");
   const baseline = useRef(live);
   useEffect(() => {
-    if (!dirty) {
+    if (!dirty && open) {
       baseline.current = live;
       setSource(live);
     }
-  }, [live, dirty]);
+  }, [live, dirty, open]);
   useEffect(() => {
     onDirty(dirty);
     return () => onDirty(false);
@@ -88,7 +94,9 @@ export function ScopedCode({
         Array.isArray(value) ||
         (scope === "layout"
           ? !Array.isArray(value.nodes) ||
-            Object.keys(value).some((key) => !["nodes", "pages"].includes(key))
+            Object.keys(value).some(
+              (key) => !["nodes", "pages", "presets"].includes(key),
+            )
           : JSON.stringify(Object.keys(value).sort()) !==
             JSON.stringify(expected))
       )
@@ -155,7 +163,14 @@ export function ScopedCode({
       <button
         className="panel-secondary"
         aria-expanded={open}
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          if (!open && !dirty) {
+            const value = JSON.stringify(scoped(content, scope, page), null, 2);
+            baseline.current = value;
+            setSource(value);
+          }
+          setOpen(!open);
+        }}
       >
         此面板的程式碼 {open ? "−" : "+"}
       </button>

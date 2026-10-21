@@ -1,4 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { instantiateAssembly } from "../lib/assemblies";
+import { descendants } from "../lib/workspace";
+import {
+  memo,
+  useDeferredValue,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type {
   SiteContent,
   Selection,
@@ -14,6 +24,15 @@ import {
   type SitePage,
 } from "../components/SiteRenderer";
 import { defaultSections } from "../components/ContentSection";
+import { BlockLibrary, blockMime } from "./BlockLibrary";
+import {
+  createBlockRecipe,
+  blockRecipes,
+  type BlockRecipe,
+} from "../lib/blocks";
+import { ElementStylePanel } from "./ElementStylePanel";
+import { PresentationPanel } from "./PresentationPanel";
+import { copyDefaults } from "../lib/presentation";
 import { WorkspacePanel, LayerTree } from "./WorkspacePanel";
 import { ScopedCode } from "./ScopedCode";
 import { useFreeLayout } from "./useFreeLayout";
@@ -25,6 +44,8 @@ import { ApiError, prepareUpload, StudioApi } from "./api";
 import { Auth } from "./Auth";
 import { CodePanel, InteractionsPanel } from "./advanced";
 import { ContentPanel, ThemePanel } from "./panels";
+
+const MemoSiteRenderer = memo(SiteRenderer);
 
 type PublishResult = {
   version: string;
@@ -113,6 +134,9 @@ function Editor({
     (document.body.dataset.page as SitePage) || "home",
   );
   const [layersOpen, setLayersOpen] = useState(false);
+  const [blockMode, setBlockMode] = useState(false);
+  const deferredContent = useDeferredValue(content);
+  const editGroup = useRef({ key: "", time: 0 });
   const [device, setDevice] = useState("auto"),
     [zoom, setZoom] = useState(1),
     [snap, setSnap] = useState(true);
@@ -139,8 +163,20 @@ function Editor({
   function selectLayer(value: Selection) {
     if (!discardCode()) return;
     setSelection(value);
-    setTab(value.startsWith("node:") ? "layout" : "content");
+    if (innerWidth <= 1000) setLayersOpen(false);
+    setTab(
+      value === "settings"
+        ? "theme"
+        : value.startsWith("node:")
+          ? "layout"
+          : "content",
+    );
     setPanelOpen(true);
+    requestAnimationFrame(() =>
+      document
+        .querySelector(".panel-scroll")
+        ?.scrollTo({ top: 0, behavior: "instant" }),
+    );
   }
   function replaceContent(next: SiteContent) {
     apply(next);
@@ -163,6 +199,9 @@ function Editor({
     [showPublish, setShowPublish] = useState(false),
     [historyOpen, setHistoryOpen] = useState(false);
   const [historyTick, setHistoryTick] = useState(0);
+  const currentSignature = useRef("");
+  const alive = useRef(true);
+  const assetCache = useRef(new Map<string, string>());
   const current = useRef<SiteContent | null>(null),
     revision = useRef(0),
     saved = useRef(""),
@@ -188,9 +227,13 @@ function Editor({
       items
         .filter((m) => needed.includes(m.id))
         .map(async (m) => {
+          const cached = assetCache.current.get(m.id);
+          if (cached) return [m.id, cached] as const;
           const blob = await api.mediaBlob(m.id);
+          if (!alive.current) throw new Error("Editor closed");
           const url = URL.createObjectURL(blob);
           objectUrls.current.push(url);
+          assetCache.current.set(m.id, url);
           return [m.id, url] as const;
         }),
     );
@@ -212,27 +255,31 @@ function Editor({
       current.current = draft.content;
       revision.current = draft.revision;
       saved.current = JSON.stringify(draft.content);
+      currentSignature.current = saved.current;
       conflicts.current = false;
       setContent(draft.content);
       setSelection(selectedForPage(draft.content, page) as Selection);
       setMedia(files.media);
       setHistory(versions.versions);
       setSaveState("saved");
-      await cacheMedia(files.media, collectAssetIds(draft.content));
+      await cacheMedia(files.media, collectAssetIds(draft.content, true));
     } catch (e) {
       fail(e);
     }
   }
   useEffect(() => {
+    alive.current = true;
     load();
     return () => {
+      alive.current = false;
       objectUrls.current.forEach(URL.revokeObjectURL);
+      assetCache.current.clear();
     };
   }, []);
   useEffect(() => {
     if (!view.current || !content || !preview) return;
     return initViewer(view.current);
-  }, [content, preview, assets, page]);
+  }, [deferredContent, preview, assets, page]);
   useEffect(() => {
     if (!content) return;
     document.title = `${content.settings.name} · 作者模式`;
@@ -241,7 +288,7 @@ function Editor({
     const handler = (e: BeforeUnloadEvent) => {
       if (
         codeDirty.current ||
-        (current.current && JSON.stringify(current.current) !== saved.current)
+        (current.current && currentSignature.current !== saved.current)
       ) {
         e.preventDefault();
       }
@@ -250,17 +297,30 @@ function Editor({
     return () => window.removeEventListener("beforeunload", handler);
   }, []);
   function apply(next: SiteContent, remember = true) {
-    if (
-      !current.current ||
-      JSON.stringify(next) === JSON.stringify(current.current)
-    )
-      return;
-    if (remember) {
-      undo.current.push(structuredClone(current.current));
+    const signature = JSON.stringify(next);
+    if (!current.current || signature === currentSignature.current) return;
+    const focused = document.activeElement as HTMLInputElement | null;
+    const typing =
+      focused &&
+      ["INPUT", "TEXTAREA"].includes(focused.tagName) &&
+      !["checkbox", "file"].includes(focused.type);
+    const group = typing
+      ? `${selection}:${tab}:${focused.getAttribute("aria-label") || focused.closest("label")?.textContent}`
+      : "";
+    const now = performance.now();
+    const coalesce = Boolean(
+      group &&
+      group === editGroup.current.key &&
+      now - editGroup.current.time < 650,
+    );
+    editGroup.current = { key: group, time: now };
+    if (remember && !coalesce) {
+      undo.current.push(current.current);
       if (undo.current.length > 50) undo.current.shift();
       redo.current = [];
     }
     current.current = next;
+    currentSignature.current = signature;
     setContent(next);
     setHistoryTick((t) => t + 1);
     setSaveState("dirty");
@@ -366,59 +426,63 @@ function Editor({
     (id) => setSelection(`node:${id}`),
     snap,
   );
-  function addCanvasBlock(kind: "project" | "note") {
-    const id = crypto.randomUUID();
-    if (kind === "project") {
-      if ((current.current?.projects.length || 0) >= 24) return;
-      update((n) =>
-        n.projects.push({
-          id,
-          title: "新的作品",
-          category: "設計",
-          description: "在這裡介紹你的作品。",
-          year: new Date().getUTCFullYear().toString(),
-          image: "/assets/work-quiet.svg",
-          alt: "作品封面",
-          url: "",
-          tone: "silver",
-          demo: false,
-        }),
-      );
-      setPage("work");
-    } else {
-      if ((current.current?.notes.length || 0) >= 30) return;
-      update((n) => {
-        n.settings.showNotes = true;
-        n.notes.push({
-          id,
-          title: "新的筆記",
-          excerpt: "寫下你現在的想法。",
-          date: new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei" })
-            .format(new Date())
-            .replaceAll("/", "."),
-          tag: "隨筆",
-          url: "",
-        });
-      });
-      setPage("journal");
+  function insertRecipe(
+    recipe: BlockRecipe | `preset:${string}`,
+    droppedParent?: string | null,
+  ) {
+    if (!current.current || !discardCode()) return;
+    const selectedNode = current.current.workspace?.nodes.find(
+      (n) => `node:${n.id}` === selection,
+    );
+    const parent =
+      droppedParent !== undefined
+        ? droppedParent
+        : selectedNode?.type === "frame"
+          ? selectedNode.id
+          : selectedNode?.parent || null;
+    const preset = recipe.startsWith("preset:")
+      ? current.current.workspace?.presets?.find(
+          (p) => p.id === recipe.slice(7),
+        )
+      : undefined;
+    if (recipe.startsWith("preset:") && !preset) return;
+    const nodes = preset
+      ? instantiateAssembly(preset, page, parent)
+      : createBlockRecipe(recipe as BlockRecipe, page, parent);
+    const candidate = structuredClone(current.current);
+    candidate.workspace ||= { nodes: [] };
+    candidate.workspace.nodes.push(...nodes);
+    if (!contentSchema.safeParse(candidate).success) {
+      setNotice("此位置超過積木上限或六層深度，請選擇較外層的面板。");
+      return;
     }
-    setSelection(`${kind}:${id}`);
-    changeTab("content");
-    setPanelOpen(true);
+    if ((current.current.workspace?.nodes.length || 0) + nodes.length > 100) {
+      setNotice("網站積木已達上限，請先整理圖層。");
+      return;
+    }
+    update((next) => {
+      next.workspace ||= { nodes: [] };
+      next.workspace.nodes.push(...nodes);
+    });
+    selectLayer(`node:${nodes[0].id}`);
+    setNotice(`已插入${nodes[0].name}，可拆解、重排與復原。`);
+    requestAnimationFrame(() =>
+      view.current
+        ?.querySelector(`[data-node-id="${nodes[0].id}"]`)
+        ?.scrollIntoView({ block: "center", behavior: "smooth" }),
+    );
   }
   const saveNow = () => {
     const job = saveQueue.current
       .catch(() => undefined)
       .then(async () => {
-        if (
-          !current.current ||
-          JSON.stringify(current.current) === saved.current
-        )
+        if (!current.current || currentSignature.current === saved.current)
           return;
         if (conflicts.current)
           throw new Error("草稿有版本衝突，請重新載入後再儲存。");
-        const document = structuredClone(current.current),
-          signature = JSON.stringify(document);
+        // Immutable snapshots are reused; update() always clones before mutation.
+        const document = current.current,
+          signature = currentSignature.current;
         const valid = contentSchema.safeParse(document);
         if (!valid.success) {
           setSaveState("error");
@@ -438,7 +502,7 @@ function Editor({
           revision.current = result.revision;
           saved.current = signature;
           setSaveState(
-            JSON.stringify(current.current) === signature ? "saved" : "dirty",
+            currentSignature.current === signature ? "saved" : "dirty",
           );
         } catch (e) {
           if (e instanceof ApiError && e.status === 409)
@@ -452,7 +516,7 @@ function Editor({
   };
   saveRef.current = saveNow;
   useEffect(() => {
-    if (!content || JSON.stringify(content) === saved.current) return;
+    if (!content || currentSignature.current === saved.current) return;
     const timer = setTimeout(() => {
       saveRef.current().catch(fail);
     }, 1200);
@@ -560,9 +624,11 @@ function Editor({
         method: "POST",
         body: form,
       });
+      if (!alive.current) return;
       setMedia((previous) => [result.media, ...previous]);
       const objectUrl = URL.createObjectURL(prepared);
       objectUrls.current.push(objectUrl);
+      assetCache.current.set(result.media.id, objectUrl);
       setAssets((previous) => ({ ...previous, [result.media.id]: objectUrl }));
       setNotice("素材已上傳，選擇「套用」後加入內容。");
     } catch (e) {
@@ -579,8 +645,10 @@ function Editor({
     if (!assets[m.id]) {
       try {
         const blob = await api.mediaBlob(m.id);
+        if (!alive.current) return;
         const objectUrl = URL.createObjectURL(blob);
         objectUrls.current.push(objectUrl);
+        assetCache.current.set(m.id, objectUrl);
         setAssets((previous) => ({ ...previous, [m.id]: objectUrl }));
       } catch (e) {
         fail(e);
@@ -606,7 +674,13 @@ function Editor({
           );
         if (canvasImage) canvasImage.image = value;
         else if (project) project.image = value;
-        else {
+        else if (selection === "settings") {
+          next.presentation ||= {};
+          next.presentation.logo = value;
+        } else if (selection === "about") {
+          next.presentation ||= {};
+          next.presentation.missionImage = value;
+        } else {
           next.hero.image = value;
           setSelection("hero");
           setPage("home");
@@ -633,6 +707,14 @@ function Editor({
     try {
       await api.request(`/media/${m.id}`, { method: "DELETE" });
       setMedia((previous) => previous.filter((x) => x.id !== m.id));
+      const url = assetCache.current.get(m.id);
+      if (url) URL.revokeObjectURL(url);
+      assetCache.current.delete(m.id);
+      setAssets((previous) =>
+        Object.fromEntries(
+          Object.entries(previous).filter(([id]) => id !== m.id),
+        ),
+      );
       setNotice("未使用的素材已刪除。");
     } catch (e) {
       fail(e);
@@ -643,7 +725,13 @@ function Editor({
       const result = await api.request<{ content: SiteContent }>(
         `/history/${id}`,
       );
-      apply(result.content);
+      const restored = structuredClone(result.content);
+      const presets = current.current?.workspace?.presets;
+      if (presets?.length) {
+        restored.workspace ||= { nodes: [] };
+        restored.workspace.presets = structuredClone(presets);
+      }
+      apply(restored);
       setNotice("歷史版本已載入草稿，發布後才會更新網站。");
       setHistoryOpen(false);
     } catch (e) {
@@ -704,8 +792,9 @@ function Editor({
   };
   return (
     <div
-      className={`editor-shell ${panelOpen ? "panel-open" : ""} ${!preview ? "has-layers" : ""} ${layersOpen ? "layers-open" : ""}`}
+      className={`editor-shell ${blockMode ? "blueprint-mode" : ""} ${panelOpen ? "panel-open" : ""} ${!preview ? "has-layers" : ""} ${layersOpen ? "layers-open" : ""}`}
       data-history-tick={historyTick}
+      data-preview-pending={content !== deferredContent}
     >
       <header className="editor-topbar">
         <div className="editor-title">
@@ -736,7 +825,7 @@ function Editor({
             disabled={!undo.current.length}
             onClick={() => {
               if (!undo.current.length || !current.current) return;
-              redo.current.push(structuredClone(current.current));
+              redo.current.push(current.current);
               apply(undo.current.pop()!, false);
             }}
           >
@@ -749,7 +838,7 @@ function Editor({
             disabled={!redo.current.length}
             onClick={() => {
               if (!redo.current.length || !current.current) return;
-              undo.current.push(structuredClone(current.current));
+              undo.current.push(current.current);
               apply(redo.current.pop()!, false);
             }}
           >
@@ -802,27 +891,41 @@ function Editor({
       </header>
       {!preview && (
         <aside className="editor-layers" aria-label="頁面與圖層">
+          <div className="studio-modes" role="group" aria-label="編輯模式">
+            <button
+              aria-pressed={!blockMode}
+              onClick={() => setBlockMode(false)}
+            >
+              圖層
+            </button>
+            <button
+              aria-pressed={blockMode}
+              onClick={() => {
+                setBlockMode(true);
+              }}
+            >
+              積木模式
+            </button>
+          </div>
+          {blockMode && (
+            <BlockLibrary
+              insert={insertRecipe}
+              presets={content.workspace?.presets}
+              removePreset={(id) =>
+                update((next) => {
+                  next.workspace!.presets = next.workspace!.presets?.filter(
+                    (p) => p.id !== id,
+                  );
+                })
+              }
+              remaining={100 - (content.workspace?.nodes.length || 0)}
+            />
+          )}
           <div className="layers-title">
             <span>LAYERS</span>
             <span>長按拖曳</span>
           </div>
-          <p className="layer-section-label">頁面</p>
-          <div className="layer-pages">
-            {Object.entries(pageNames).map(([value, label]) => (
-              <button
-                key={value}
-                aria-pressed={page === value}
-                onClick={() => {
-                  changePage(value as SitePage);
-                  setLayersOpen(false);
-                }}
-              >
-                <span>◻</span>
-                {label}
-                <Icon name="diagonal" size={11} />
-              </button>
-            ))}
-          </div>
+
           <p className="layer-section-label">頁面區塊</p>
           <div className="layer-blocks">
             {(content.layout?.sections || defaultSections)
@@ -901,6 +1004,22 @@ function Editor({
               首頁主視覺
             </button>
           )}
+          {page === "home" && (
+            <>
+              <button
+                className="node-layer"
+                onClick={() => selectLayer("about")}
+              >
+                介紹卡片
+              </button>
+            </>
+          )}
+          <button
+            className="node-layer"
+            onClick={() => selectLayer("settings")}
+          >
+            品牌與全站設定
+          </button>
           {page === "work" &&
             content.projects.map((item) => (
               <button
@@ -966,12 +1085,28 @@ function Editor({
           }
         }}
         onDragStart={(event) => event.preventDefault()}
+        onDragOver={(event) => {
+          if (!preview && event.dataTransfer.types.includes(blockMime)) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+          }
+        }}
+        onDrop={(event) => {
+          const recipe = event.dataTransfer.getData(blockMime);
+          if (!preview && blockRecipes.some((r) => r.id === recipe)) {
+            event.preventDefault();
+            const id = (event.target as Element).closest<HTMLElement>(
+              ".node-frame",
+            )?.dataset.nodeId;
+            insertRecipe(recipe as BlockRecipe, id || null);
+          }
+        }}
         onKeyDownCapture={(event) => {
           if (
             !preview &&
             ["Enter", " "].includes(event.key) &&
             !(event.target as Element).closest(
-              "[data-drag-handle],[data-free-move],[data-free-resize]",
+              "[data-drag-handle],[data-free-move],[data-free-resize],[data-delete-node]",
             )
           ) {
             event.preventDefault();
@@ -995,6 +1130,29 @@ function Editor({
           }
           event.preventDefault();
           event.stopPropagation();
+          const deleteId =
+            target.closest<HTMLElement>("[data-delete-node]")?.dataset
+              .deleteNode;
+          if (deleteId && current.current?.workspace) {
+            const node = current.current.workspace.nodes.find(
+              (n) => n.id === deleteId,
+            );
+            if (node && !node.locked) {
+              const ids = new Set([
+                node.id,
+                ...descendants(current.current.workspace.nodes, node.id),
+              ]);
+              update((next) => {
+                next.workspace!.nodes = next.workspace!.nodes.filter(
+                  (n) => !ids.has(n.id),
+                );
+              });
+              selectLayer(node.parent ? `node:${node.parent}` : "settings");
+              setNotice("面板已刪除，可使用頂部復原。");
+            }
+            return;
+          }
+
           if (
             target.closest(
               "[data-drag-handle],[data-free-move],[data-free-resize]",
@@ -1002,15 +1160,29 @@ function Editor({
           )
             return;
           const edit = target.closest<HTMLElement>("[data-edit]")?.dataset.edit;
-          if (edit) selectLayer(edit as Selection);
+          if (edit) {
+            selectLayer(edit as Selection);
+            const field =
+              target.closest<HTMLElement>("[data-field]")?.dataset.field;
+            if (field)
+              requestAnimationFrame(() => {
+                const input = [
+                  ...document.querySelectorAll<HTMLInputElement>(
+                    ".editor-panel input,.editor-panel textarea",
+                  ),
+                ].find((el) => el.getAttribute("aria-label") === field);
+                input?.focus({ preventScroll: true });
+                input?.select();
+              });
+          }
         }}
       >
         <div
           className={`canvas-stage ${snap ? "show-grid" : ""}`}
           style={{ width: device === "auto" ? "100%" : `${device}px`, zoom }}
         >
-          <SiteRenderer
-            content={content}
+          <MemoSiteRenderer
+            content={deferredContent || content}
             api={api.base}
             base={base}
             editing={!preview}
@@ -1064,44 +1236,10 @@ function Editor({
           <button
             aria-label="開關圖層面板"
             aria-pressed={layersOpen}
-            onClick={() => setLayersOpen((v) => !v)}
+            onClick={() => setLayersOpen((value) => !value)}
           >
             <Icon name="menu" size={16} />
-            <span>圖層</span>
-          </button>
-          <i />
-          <button
-            aria-label="開啟佈局工具"
-            onClick={() => {
-              changeTab("layout");
-              setPanelOpen(true);
-            }}
-          >
-            面板／佈局
-          </button>
-          <button
-            aria-label="新增作品區塊"
-            onClick={() => addCanvasBlock("project")}
-          >
-            <Icon name="plus" size={15} />
-            <span>作品</span>
-          </button>
-          <button
-            aria-label="新增筆記區塊"
-            onClick={() => addCanvasBlock("note")}
-          >
-            <Icon name="plus" size={15} />
-            <span>筆記</span>
-          </button>
-          <button
-            aria-label="開啟素材工具"
-            onClick={() => {
-              changeTab("media");
-              setPanelOpen(true);
-            }}
-          >
-            <Icon name="upload" size={15} />
-            <span>素材</span>
+            <span>圖層與積木</span>
           </button>
         </div>
       )}
@@ -1109,7 +1247,7 @@ function Editor({
         <aside className="editor-panel" aria-label="網站編輯面板">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">MAKE IT YOURS</p>
+              <p className="eyebrow">INSPECTOR / LIVE CANVAS</p>
               <h2>
                 {tab === "theme"
                   ? "視覺風格"
@@ -1132,6 +1270,25 @@ function Editor({
               <Icon name="close" size={18} />
             </button>
           </div>
+          <p className="selection-path">
+            {pageNames[page]} /{" "}
+            {selection.startsWith("node:")
+              ? content.workspace?.nodes.find(
+                  (n) => `node:${n.id}` === selection,
+                )?.name || "積木"
+              : selection.startsWith("project:")
+                ? content.projects.find((p) => `project:${p.id}` === selection)
+                    ?.title
+                : selection.startsWith("copy:")
+                  ? selection.slice(5)
+                  : (
+                      {
+                        hero: "首頁主視覺",
+                        about: "介紹卡片",
+                        settings: "全站設定",
+                      } as Record<string, string>
+                    )[selection] || selection}
+          </p>
           <div className="panel-tabs" role="tablist" aria-label="編輯工具">
             {(
               [
@@ -1227,6 +1384,10 @@ function Editor({
             {tab === "code" && (
               <CodePanel
                 content={content}
+                page={page}
+                api={api.base}
+                base={base}
+                assets={assets}
                 onDirty={(dirty) => {
                   codeDirty.current = dirty;
                 }}
@@ -1241,22 +1402,66 @@ function Editor({
                 }
               />
             )}
-            {tab === "content" && (
-              <ContentPanel
-                content={content}
-                page={page}
-                selection={selection}
-                setSelection={(value) => {
-                  setSelection(value);
-                  if (value.startsWith("project:")) setPage("work");
-                  else if (value.startsWith("note:")) setPage("journal");
-                  else if (value === "hero") setPage("home");
-                  else if (["about", "contact", "music"].includes(value))
-                    setPage("about");
-                }}
-                update={update}
-                openMedia={() => changeTab("media")}
-              />
+            {tab === "content" &&
+              (selection.startsWith("copy:") ? (
+                <PresentationPanel
+                  content={content}
+                  selection={selection}
+                  update={update}
+                />
+              ) : (
+                <ContentPanel
+                  content={content}
+                  page={page}
+                  selection={selection}
+                  setSelection={(value) => {
+                    setSelection(value);
+                    if (value.startsWith("project:")) setPage("work");
+                    else if (value.startsWith("note:")) setPage("journal");
+                    else if (value === "hero") setPage("home");
+                    else if (["about", "contact", "music"].includes(value))
+                      setPage("about");
+                  }}
+                  update={update}
+                  openMedia={() => changeTab("media")}
+                />
+              ))}
+            {tab === "theme" && (
+              <div className="advanced-panel">
+                <label>
+                  品牌圖標
+                  <input
+                    aria-label="品牌圖標"
+                    value={
+                      content.presentation?.logo ||
+                      "/assets/outdesign-mark.webp"
+                    }
+                    onChange={(e) =>
+                      update((next) => {
+                        next.presentation ||= {};
+                        next.presentation.logo = e.target.value;
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  編輯介面文字
+                  <select
+                    aria-label="選擇介面文字"
+                    value=""
+                    onChange={(e) => selectLayer(`copy:${e.target.value}`)}
+                  >
+                    <option value="" disabled>
+                      選擇文字位置
+                    </option>
+                    {Object.keys(copyDefaults).map((key) => (
+                      <option key={key} value={key}>
+                        {copyDefaults[key].slice(0, 22)} · {key}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
             )}
             {tab === "theme" && (
               <ThemePanel
@@ -1292,7 +1497,10 @@ function Editor({
                   />
                 </label>
                 <p className="media-target">
-                  圖片套用位置：{selectedProject?.title || "首頁主視覺"}
+                  圖片套用位置：
+                  {selection === "settings"
+                    ? "品牌圖標"
+                    : selectedProject?.title || "首頁主視覺"}
                 </p>
                 <div className="media-list">
                   {media.map((m) => (
@@ -1336,6 +1544,15 @@ function Editor({
                   </p>
                 )}
               </>
+            )}
+            {(tab === "content" ||
+              (tab === "theme" && selection === "settings")) && (
+              <ElementStylePanel
+                content={content}
+                page={page}
+                selection={selection}
+                update={update}
+              />
             )}
             <div className="history-block">
               {tab !== "code" && (

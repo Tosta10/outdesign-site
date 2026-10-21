@@ -128,12 +128,12 @@ export function Auth({
               type={visible ? "text" : "password"}
               value={password1}
               onChange={(e) => setPassword1(e.target.value)}
-              minLength={12}
+              minLength={setup ? 16 : 12}
               maxLength={200}
               autoComplete={setup ? "new-password" : "current-password"}
               required
               disabled={!ready || busy}
-              placeholder={setup ? "至少 12 個字元" : "輸入第一組密碼"}
+              placeholder={setup ? "至少 16 個字元" : "輸入第一組密碼"}
             />
           </label>
           <label htmlFor={`${id}-two`}>
@@ -143,7 +143,7 @@ export function Auth({
               type={visible ? "text" : "password"}
               value={password2}
               onChange={(e) => setPassword2(e.target.value)}
-              minLength={12}
+              minLength={setup ? 16 : 12}
               maxLength={200}
               autoComplete={setup ? "new-password" : "current-password"}
               required

@@ -1,8 +1,9 @@
 ---
 import { SiteRenderer, type SitePage } from '../components/SiteRenderer';
-import { loadPublicContent } from '../lib/content';
+import { assetUrl, loadPublicContent } from '../lib/content';
 import '../styles/site.css';
 import '../styles/effects.css';
+import '../styles/home.css';
 import '../styles/canvas.css';
 const { page = 'home' } = Astro.props as {page?: SitePage};
 const { content, version } = await loadPublicContent();
@@ -25,7 +26,9 @@ const title = page === 'home' ? content.settings.siteTitle : `${{work:'作品',j
     <meta property="og:locale" content="zh_TW" />
     <meta name="generator" content={Astro.generator} />
     <link rel="canonical" href={canonical} />
-    <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+    <link rel="icon" href={content.presentation?.logo ? assetUrl(content.presentation.logo,api,base) : `${base}favicon-32.png`} />
+    {!content.presentation?.logo && <link rel="icon" href={`${base}favicon.ico`} sizes="any" />}
+    <link rel="apple-touch-icon" href={content.presentation?.logo ? assetUrl(content.presentation.logo,api,base) : `${base}apple-touch-icon.png`} />
     <title>{title}</title>
   </head>
   <body data-api={api} data-base={base} data-version={version} data-page={page}>

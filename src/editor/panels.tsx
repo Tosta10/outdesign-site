@@ -1,7 +1,4 @@
-import {
-  defaultDesign,
-  verdantDesign,
-} from "../../supabase/functions/_shared/schema";
+import { defaultDesign } from "../../supabase/functions/_shared/schema";
 import type { SitePage } from "../components/SiteRenderer";
 import { useId } from "react";
 import type {
@@ -34,6 +31,7 @@ function Field({
       {multiline ? (
         <textarea
           id={id}
+          aria-label={label}
           aria-describedby={hint ? `${id}-hint` : undefined}
           value={value}
           maxLength={max}
@@ -43,6 +41,7 @@ function Field({
       ) : (
         <input
           id={id}
+          aria-label={label}
           type={type}
           aria-describedby={hint ? `${id}-hint` : undefined}
           value={value}
@@ -333,6 +332,34 @@ export function ContentPanel({
       {selection === "about" && (
         <>
           <Heading>關於我</Heading>
+          <Field
+            label="介紹卡圖片"
+            value={
+              c.presentation?.missionImage || "/assets/lunar-landscape.webp"
+            }
+            max={2048}
+            onChange={(value) =>
+              update((next) => {
+                next.presentation ||= {};
+                next.presentation.missionImage = value;
+              })
+            }
+          />
+          <button className="panel-secondary" onClick={openMedia}>
+            替換介紹卡圖片
+          </button>
+          <Field
+            label="介紹卡圖片替代文字"
+            value={c.presentation?.missionAlt || "銀光映照的月面山脈"}
+            max={160}
+            onChange={(value) =>
+              update((next) => {
+                next.presentation ||= {};
+                next.presentation.missionAlt = value;
+              })
+            }
+          />
+
           <Field
             label="關於我的標題"
             value={c.about.title}
@@ -715,44 +742,56 @@ export function ThemePanel({
   return (
     <>
       <p className="panel-help">
-        兩種視覺組合共用排版與內容；切換後立即預覽，發布後才會對訪客生效。
+        調整全站色彩；單一面板的邊框、陰影與互動可在畫布選取後設定。
       </p>
-      <div className="theme-options">
+      <Heading>網站調色</Heading>
+      <div className="property-grid">
         {(
           [
-            { value: "prism", name: "Prism", desc: "深黑底色，少量虹彩引導" },
-            {
-              value: "verdant",
-              name: "Verdant 墨綠",
-              desc: "墨綠石墨與霧銀綠，統一的自然色階",
-            },
+            ["background", "網站背景"],
+            ["surface", "面板底色"],
+            ["raised", "浮層底色"],
+            ["text", "主要文字"],
+            ["muted", "次要文字"],
+            ["accent", "強調色"],
           ] as const
-        ).map((t) => (
-          <button
-            key={t.value}
-            className={`theme-option ${t.value} ${c.settings.theme === t.value ? "selected" : ""}`}
-            aria-pressed={c.settings.theme === t.value}
-            onClick={() =>
-              update((n) => {
-                n.settings.theme = t.value;
-                n.design = {
-                  ...(t.value === "verdant" ? verdantDesign : defaultDesign),
-                };
-              })
-            }
-          >
-            <span className="theme-preview">
-              <i />
-              <i />
-              <i />
-              <span />
-            </span>
-            <strong>{t.name}</strong>
-            <span>{t.desc}</span>
-            {c.settings.theme === t.value && <Icon name="check" size={17} />}
-          </button>
+        ).map(([key, label]) => (
+          <label key={key}>
+            {label}
+            <input
+              type="color"
+              aria-label={label}
+              value={(c.design || defaultDesign)[key]}
+              onChange={(e) =>
+                update((next) => {
+                  next.design = {
+                    ...(next.design || defaultDesign),
+                    [key]: e.target.value,
+                  };
+                })
+              }
+            />
+          </label>
         ))}
       </div>
+      <label>
+        全站圓角
+        <input
+          type="range"
+          aria-label="全站圓角"
+          min="0"
+          max="32"
+          value={(c.design || defaultDesign).radius}
+          onChange={(e) =>
+            update((next) => {
+              next.design = {
+                ...(next.design || defaultDesign),
+                radius: Number(e.target.value),
+              };
+            })
+          }
+        />
+      </label>
       <Heading>網站資訊</Heading>
       <Field
         label="網站顯示名稱"

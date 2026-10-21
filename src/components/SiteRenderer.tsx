@@ -3,9 +3,11 @@ import {
   defaultDesign,
   defaultInteractions,
 } from "../../supabase/functions/_shared/schema";
+import { elementProps } from "../lib/presentation";
 import { assetUrl } from "../lib/content";
 import { CanvasPanels } from "./CanvasPanels";
 import { Icon } from "./Icon";
+import { EditableText } from "./EditableText";
 import {
   ContentSection,
   defaultSections,
@@ -33,11 +35,20 @@ export function SiteRenderer({
   const url = (route = "") =>
     `${base.replace(/\/$/, "")}/${route}${route ? "/" : ""}`;
   const img = (value: string) => assetUrl(value, api, base, privateAssets);
+  const text = (id: string, fallback?: string) => (
+    <EditableText
+      content={c}
+      id={id}
+      editing={editing}
+      selected={selected}
+      fallback={fallback}
+    />
+  );
+  const first = c.projects[0];
   const scenic =
     c.hero.image === "/assets/prism.svg"
       ? "/assets/lunar-landscape.webp"
       : c.hero.image;
-  const first = c.projects[0];
   const allowed: Record<SitePage, SectionKey[]> = {
     home: [],
     work: ["work"],
@@ -99,7 +110,7 @@ export function SiteRenderer({
       data-card-effect={effects.card}
       data-tilt={effects.tilt}
       data-damping={effects.damping}
-      data-ripple={effects.ripple}
+      data-press={effects.press ?? effects.ripple ?? true}
       data-transition={effects.transition}
       data-editing={editing}
     >
@@ -124,35 +135,36 @@ export function SiteRenderer({
               decoding="async"
             />
           )}
-          <header className="site-header">
+          <header
+            className="site-header"
+            {...elementProps(c, "header", editing)}
+          >
             <a
-              className="wordmark"
+              className={`wordmark ${editing && selected === "settings" ? "is-selected" : ""}`}
+              data-edit={editing ? "settings" : undefined}
               data-page-target="home"
               href={editing ? "#top" : url()}
               aria-label={`${c.settings.name} 首頁`}
             >
-              <span className="brand-moon" aria-hidden="true" />
+              <img
+                className="brand-mark"
+                src={img(c.presentation?.logo || "/assets/outdesign-mark.webp")}
+                width="36"
+                height="36"
+                alt=""
+              />
               <span>{c.settings.name}</span>
             </a>
-            <p className="header-caption">INDEPENDENT DESIGN & DEVELOPMENT</p>
             <div className="header-actions">
               <button
-                className="header-author"
-                data-studio-launch
-                aria-label="開啟作者登入"
-              >
-                <Icon name="lock" size={13} />
-                <span>作者入口</span>
-              </button>
-              <span className="header-divider" />
-              <button
                 className="menu-toggle"
+                data-edit={editing ? "copy:menu.label" : undefined}
                 data-menu-toggle
                 aria-controls="site-navigation"
                 aria-expanded="false"
                 aria-label="開啟選單"
               >
-                <span>探索</span>
+                <span>{text("menu.label")}</span>
                 <Icon name="menu" size={20} />
               </button>
             </div>
@@ -161,76 +173,79 @@ export function SiteRenderer({
             <section
               className={`hero${editing ? ` editable ${selected === "hero" ? "is-selected" : ""}` : ""}`}
               id="top"
+              {...elementProps(c, "hero", editing)}
               data-edit={editing ? "hero" : undefined}
             >
               <div className="hero-copy">
-                <p className="eyebrow">{c.hero.eyebrow}</p>
+                <p className="eyebrow" data-field="上方短句">
+                  {c.hero.eyebrow}
+                </p>
                 <h1>
-                  {c.hero.line1}
+                  <span data-field="標題第一行">{c.hero.line1}</span>
                   <br />
-                  <span>{c.hero.line2}</span>
+                  <span data-field="標題第二行">{c.hero.line2}</span>
                 </h1>
-                <p className="hero-description preserve-lines">
+                <p
+                  className="hero-description preserve-lines"
+                  data-field="介紹文字"
+                >
                   {c.hero.description}
                 </p>
-                <a
-                  className="hero-explore"
-                  data-page-target="work"
-                  href={url("work")}
-                >
-                  <span className="circle-arrow">
-                    <Icon name="arrow" size={19} />
-                  </span>
-                  <span className="hairline" />
-                  <span>探索我的作品</span>
-                </a>
               </div>
               <a
-                className="mission-card glass-surface"
+                className={`mission-card glass-surface${editing && selected === "about" ? " is-selected" : ""}`}
+                {...elementProps(c, "mission", editing)}
                 data-page-target="about"
                 href={url("about")}
                 data-optical-card
+                data-edit={editing ? "about" : undefined}
               >
                 <div className="card-meta">
                   <span>
                     01 <i />
                   </span>
-                  <span>THE WAY I CREATE</span>
+                  <span>{text("mission.meta")}</span>
                 </div>
                 <div className="mission-body">
                   <div>
-                    <p className="mission-kicker">A quieter kind of digital.</p>
-                    <h2 className="preserve-lines">{c.about.title}</h2>
+                    <p className="mission-kicker">{text("mission.kicker")}</p>
+                    <h2 className="preserve-lines" data-field="關於我的標題">
+                      {c.about.title}
+                    </h2>
                     <p className="mission-description">{c.about.body}</p>
                     <span className="mission-link">
                       <span className="circle-arrow">
                         <Icon name="arrow" size={18} />
                       </span>
-                      關於我的創作
+                      {text("mission.link")}
                     </span>
                   </div>
                   <div className="mission-study">
                     <img
-                      src={img("/assets/lunar-landscape.webp")}
-                      alt="銀光映照的月面山脈"
+                      src={img(
+                        c.presentation?.missionImage ||
+                          "/assets/lunar-landscape.webp",
+                      )}
+                      alt={c.presentation?.missionAlt || "銀光映照的月面山脈"}
                       width="320"
                       height="440"
                       loading="lazy"
                     />
-                    <div className="mission-values">
-                      DESIGN
-                      <br />
-                      DEVELOPMENT
-                      <br />
-                      POSSIBILITIES
+                    <div className="mission-values preserve-lines">
+                      {text(
+                        "mission.values",
+                        "DESIGN\nDEVELOPMENT\nPOSSIBILITIES",
+                      )}
                     </div>
                   </div>
                 </div>
               </a>
               {first && (
                 <a
-                  className="featured-card glass-surface"
+                  className={`featured-card glass-surface${editing && selected === `project:${first.id}` ? " is-selected" : ""}`}
+                  {...elementProps(c, `project-${first.id}`, editing)}
                   data-optical-card
+                  data-edit={editing ? `project:${first.id}` : undefined}
                   data-page-target="work"
                   href={`${url("work")}#project-${first.id}`}
                 >
@@ -238,7 +253,7 @@ export function SiteRenderer({
                     <span>
                       02 <i />
                     </span>
-                    <span>SELECTED PROJECT</span>
+                    <span>{text("featured.meta")}</span>
                   </div>
                   <div className="featured-body">
                     <img
@@ -252,28 +267,16 @@ export function SiteRenderer({
                       <h2>{first.title}</h2>
                       <p>{first.description}</p>
                       <span className="text-link">
-                        查看作品 <Icon name="arrow" size={14} />
+                        {text("featured.link")} <Icon name="arrow" size={14} />
                       </span>
                     </div>
                   </div>
                 </a>
               )}
               <div className="hero-bottom">
-                <a
-                  className="scroll-cue"
-                  data-page-target="work"
-                  href={url("work")}
-                >
+                <span className="scroll-cue" aria-hidden="true">
                   <span className="scroll-line" />
-                  EXPLORE SELECTED WORK
-                </a>
-                <div className="page-indicators">
-                  <span>01</span>
-                  <i />
-                  <span className="muted">/ 05</span>
-                </div>
-                <span className="hero-signature">
-                  <i /> A SPACE FOR WHAT COMES NEXT
+                  {text("hero.scroll")}
                 </span>
               </div>
             </section>
@@ -292,31 +295,27 @@ export function SiteRenderer({
               <h1>
                 {page === "work" ? (
                   <>
-                    想法，<em>成為作品。</em>
+                    {text("intro.work.first")}
+                    <em>{text("intro.work.second")}</em>
                   </>
                 ) : page === "journal" ? (
                   <>
-                    思考，<em>留下痕跡。</em>
+                    {text("intro.journal.first")}
+                    <em>{text("intro.journal.second")}</em>
                   </>
                 ) : page === "resources" ? (
                   <>
-                    靈感，<em>隨手收藏。</em>
+                    {text("intro.resources.first")}
+                    <em>{text("intro.resources.second")}</em>
                   </>
                 ) : (
                   <>
-                    設計與技術之間，<em>保留一點好奇。</em>
+                    {text("intro.about.first")}
+                    <em>{text("intro.about.second")}</em>
                   </>
                 )}
               </h1>
-              <p>
-                {page === "work"
-                  ? "一個持續生長的作品集。關於介面、體驗與實驗。"
-                  : page === "journal"
-                    ? "記錄靈感、日常觀察，以及創作過程中的一些發現。"
-                    : page === "resources"
-                      ? "整理常用連結、檔案與可下載的創作資源。"
-                      : "讓想法成為可以被看見、被使用的事物。"}
-              </p>
+              <p>{text(`intro.${page}.description`)} </p>
               <span className="page-intro-number">
                 {page === "work"
                   ? "02"
@@ -335,7 +334,7 @@ export function SiteRenderer({
           aria-labelledby="drawer-title"
         >
           <div className="drawer-top">
-            <span id="drawer-title">EXPLORE THE SPACE</span>
+            <span id="drawer-title">{text("menu.title")}</span>
             <button
               className="icon-button"
               data-close-dialog
@@ -356,19 +355,13 @@ export function SiteRenderer({
                 >
                   <span className="nav-index">0{i + 1}</span>
                   <span>
-                    {label}
+                    {text(`nav.${key}`, label)}
                     <small>{english}</small>
                   </span>
                   <Icon name="diagonal" />
                 </a>
               ))}
           </nav>
-          <div className="drawer-bottom">
-            <span>MADE WITH INTENTION.</span>
-            <button data-studio-launch data-close-dialog>
-              作者入口 <Icon name="lock" size={12} />
-            </button>
-          </div>
         </dialog>
         {pageLayout?.position === "before" && panels}
         <div className="page-content">
@@ -387,21 +380,18 @@ export function SiteRenderer({
         </div>
         {pageLayout?.position !== "before" && panels}
       </main>
-      <footer className="site-footer section-shell">
-        <div>
-          <a className="footer-brand" href={url()}>
-            <span className="brand-moon" />
-            {c.settings.name}
-          </a>
-          <p>A LITTLE MORE INTENTION. A LITTLE LESS NOISE.</p>
-        </div>
+      <footer
+        {...elementProps(c, "footer", editing)}
+        className="site-footer section-shell"
+        data-edit={editing ? "settings" : undefined}
+      >
         <div className="footer-meta">
           <span>
             © {new Date().getUTCFullYear()} {c.settings.name}
           </span>
           <button data-studio-launch className="author-link">
             <Icon name="lock" size={12} />
-            作者模式
+            {text("footer.author")}
           </button>
           <a href="#top" aria-label="回到頂端">
             ↑

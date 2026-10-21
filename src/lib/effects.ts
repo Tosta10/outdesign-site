@@ -18,6 +18,7 @@ export function initEffects(root: Document | HTMLElement): () => void {
       targetX = 0,
       targetY = 0;
     let rect: DOMRect | null = null;
+    let previous = 0;
     const reset = () => {
       cancelAnimationFrame(frame);
       frame = 0;
@@ -25,13 +26,18 @@ export function initEffects(root: Document | HTMLElement): () => void {
       card.style.removeProperty("transform");
       card.style.removeProperty("will-change");
       rect = null;
+      previous = 0;
     };
-    const draw = () => {
+    const draw = (now: number) => {
       if (!eligible()) {
         reset();
         return;
       }
-      const damping = Number(site.dataset.damping) || 0.12;
+      const dt = previous ? Math.min((now - previous) / 1000, 0.05) : 1 / 60;
+      previous = now;
+      // Convert the author's 60Hz damping value to a time-based coefficient.
+      const damping =
+        1 - Math.pow(1 - (Number(site.dataset.damping) || 0.12), dt * 60);
       x += (targetX - x) * damping;
       y += (targetY - y) * damping;
       card.style.transform = `perspective(1000px) rotateX(${x}deg) rotateY(${y}deg)`;
@@ -48,7 +54,11 @@ export function initEffects(root: Document | HTMLElement): () => void {
     card.addEventListener(
       "pointerenter",
       () => {
-        if (!eligible() || site.dataset.cardEffect !== "tilt") return;
+        if (
+          !eligible() ||
+          (card.dataset.effect || site.dataset.cardEffect) !== "tilt"
+        )
+          return;
         rect = card.getBoundingClientRect();
         card.style.willChange = "transform";
       },
@@ -57,7 +67,13 @@ export function initEffects(root: Document | HTMLElement): () => void {
     card.addEventListener(
       "pointermove",
       (event) => {
-        if (!rect || !eligible()) return;
+        if (
+          !eligible() ||
+          (card.dataset.effect || site.dataset.cardEffect) !== "tilt"
+        )
+          return;
+        rect ||= card.getBoundingClientRect();
+        card.style.willChange = "transform";
         const strength = Number(site.dataset.tilt) || 3;
         targetX =
           Math.max(
@@ -87,7 +103,7 @@ export function initEffects(root: Document | HTMLElement): () => void {
   site.addEventListener(
     "click",
     (event) => {
-      if (reduced.matches || site.dataset.ripple !== "true") return;
+      if (reduced.matches || site.dataset.press !== "true") return;
       const target = (event.target as Element).closest<HTMLElement>(
         "button, .circle-arrow",
       );

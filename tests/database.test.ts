@@ -28,6 +28,15 @@ test("production PostgreSQL migration and authorization contracts", async (t) =>
       "utf8",
     ),
   );
+  await db.exec(
+    await readFile(
+      new URL(
+        "../supabase/migrations/202610210001_presentation_media.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
   await db.query(
     "insert into public.studio_state(singleton,draft) values(true,$1::jsonb)",
     [JSON.stringify(initialContent)],
@@ -158,6 +167,74 @@ test("production PostgreSQL migration and authorization contracts", async (t) =>
         [id],
       );
       assert.equal(media.rows[0].is_public, true);
+    },
+  );
+  await t.test("custom brand media becomes public atomically", async () => {
+    const id = crypto.randomUUID();
+    await db.query(
+      "insert into public.studio_media(id,name,mime,size,kind,path) values($1,'brand.webp','image/webp',100,'image',$2)",
+      [id, `${id}.webp`],
+    );
+    const content = {
+      ...initialContent,
+      presentation: { logo: `asset:${id}` },
+    };
+    await db.query("select public.studio_save_draft($1::jsonb,5)", [
+      JSON.stringify(content),
+    ]);
+    await db.query("select public.studio_publish(6,$1::uuid)", [
+      crypto.randomUUID(),
+    ]);
+    const media = await db.query<{ is_public: boolean }>(
+      "select is_public from public.studio_media where id=$1",
+      [id],
+    );
+    assert.equal(media.rows[0].is_public, true);
+  });
+  await t.test(
+    "publication excludes author presets and preserves their private media",
+    async () => {
+      const id = crypto.randomUUID();
+      await db.query(
+        "insert into public.studio_media(id,name,mime,size,kind,path) values($1,'private.webp','image/webp',100,'image',$2)",
+        [id, `${id}.webp`],
+      );
+      const content = {
+        ...initialContent,
+        workspace: {
+          nodes: [],
+          presets: [
+            {
+              id: crypto.randomUUID(),
+              name: "尚未公開",
+              nodes: [{ image: `asset:${id}` }],
+            },
+          ],
+        },
+      };
+      await db.query("select public.studio_save_draft($1::jsonb,6)", [
+        JSON.stringify(content),
+      ]);
+      const versionId = crypto.randomUUID();
+      await db.query("select public.studio_publish(7,$1::uuid)", [versionId]);
+      const version = await db.query<{
+        content: { workspace: { presets?: unknown } };
+      }>("select content from public.studio_versions where id=$1", [versionId]);
+      assert.equal(version.rows[0].content.workspace.presets, undefined);
+      const media = await db.query<{ is_public: boolean }>(
+        "select is_public from public.studio_media where id=$1",
+        [id],
+      );
+      assert.equal(media.rows[0].is_public, false);
+      const removed = await db.query<{ removed: boolean }>(
+        "select public.studio_delete_media($1::uuid) removed",
+        [id],
+      );
+      assert.equal(removed.rows[0].removed, false);
+      const draft = await db.query<{
+        draft: { workspace: { presets: unknown[] } };
+      }>("select draft from public.studio_state where singleton=true");
+      assert.equal(draft.rows[0].draft.workspace.presets.length, 1);
     },
   );
   await t.test(

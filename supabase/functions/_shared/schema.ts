@@ -58,11 +58,12 @@ export const attachmentSchema = z
   .strict();
 export const interactionSchema = z
   .object({
-    card: z.enum(["none", "lift", "tilt"]),
+    card: z.enum(["none", "lift", "tilt", "scale", "glow", "outline"]),
     tilt: z.number().min(1).max(6),
     damping: z.number().min(0.06).max(0.3),
     transition: z.enum(["none", "fade", "slide"]),
-    ripple: z.boolean(),
+    press: z.boolean().optional(),
+    ripple: z.boolean().optional(), // Read-only compatibility with older saved content.
   })
   .strict();
 export const defaultInteractions: z.infer<typeof interactionSchema> = {
@@ -70,7 +71,7 @@ export const defaultInteractions: z.infer<typeof interactionSchema> = {
   tilt: 3,
   damping: 0.12,
   transition: "fade",
-  ripple: true,
+  press: true,
 };
 export const designSchema = z
   .object({
@@ -94,15 +95,6 @@ export const defaultDesign: z.infer<typeof designSchema> = {
   width: 1280,
   radius: 12,
 };
-export const verdantDesign: z.infer<typeof designSchema> = {
-  ...defaultDesign,
-  background: "#080f0d",
-  surface: "#111d18",
-  raised: "#1b2b23",
-  text: "#e8f0e9",
-  muted: "#a1b5a8",
-  accent: "#91c4a5",
-};
 export const canvasPage = z.enum([
   "home",
   "work",
@@ -110,6 +102,28 @@ export const canvasPage = z.enum([
   "about",
   "resources",
 ]);
+export const appearanceSchema = z
+  .object({
+    color: z
+      .string()
+      .regex(/^#[0-9a-f]{6}$/i)
+      .optional(),
+    background: z
+      .string()
+      .regex(/^#[0-9a-f]{6}$/i)
+      .optional(),
+    borderColor: z
+      .string()
+      .regex(/^#[0-9a-f]{6}$/i)
+      .optional(),
+    borderWidth: z.number().min(0).max(8).optional(),
+    shadow: z.enum(["none", "soft", "deep"]).optional(),
+    effect: z
+      .enum(["none", "lift", "tilt", "scale", "glow", "outline"])
+      .optional(),
+  })
+  .strict();
+export type Appearance = z.infer<typeof appearanceSchema>;
 export const canvasNodeSchema = z
   .object({
     id: z.uuid(),
@@ -138,12 +152,71 @@ export const canvasNodeSchema = z
     opacity: z.number().min(0.1).max(1),
     hidden: z.boolean(),
     locked: z.boolean(),
+    appearance: appearanceSchema.optional(),
   })
   .strict();
 export type CanvasNode = z.infer<typeof canvasNodeSchema>;
+function validateTree(items: CanvasNode[], ctx: z.RefinementCtx) {
+  const nodes = new Map(items.map((node) => [node.id, node]));
+  if (nodes.size !== items.length)
+    ctx.addIssue({ code: "custom", message: "圖層 ID 不可重複" });
+  for (const node of items) {
+    let parent = node.parent;
+    const seen = new Set([node.id]);
+    while (parent) {
+      const frame = nodes.get(parent);
+      if (
+        !frame ||
+        frame.type !== "frame" ||
+        frame.page !== node.page ||
+        seen.has(parent) ||
+        seen.size > 6
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: "圖層需位於同頁的有效面板中，不可循環或超過六層",
+        });
+        break;
+      }
+      seen.add(parent);
+      parent = frame.parent;
+    }
+  }
+}
+export const assemblySchema = z
+  .object({
+    id: z.uuid(),
+    name: text(60).min(1),
+    nodes: z.array(canvasNodeSchema).min(1).max(30),
+  })
+  .strict()
+  .superRefine((assembly, ctx) => {
+    validateTree(assembly.nodes, ctx);
+    const roots = assembly.nodes.filter((node) => !node.parent);
+    if (
+      roots.length !== 1 ||
+      roots[0]?.type !== "frame" ||
+      assembly.nodes.some((node) => node.page !== roots[0]?.page)
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "組裝須包含一個根面板，且所有積木位於同頁",
+      });
+  });
+export type Assembly = z.infer<typeof assemblySchema>;
 export const workspaceSchema = z
   .object({
     nodes: z.array(canvasNodeSchema).max(100),
+    presets: z
+      .array(assemblySchema)
+      .max(8)
+      .refine(
+        (items) =>
+          new Set(items.map((p) => p.id)).size === items.length &&
+          new Set(items.map((p) => p.name)).size === items.length,
+        "組裝名稱與 ID 不可重複",
+      )
+      .optional(),
     pages: z
       .record(
         canvasPage,
@@ -159,33 +232,7 @@ export const workspaceSchema = z
       .optional(),
   })
   .strict()
-  .superRefine((workspace, ctx) => {
-    const nodes = new Map(workspace.nodes.map((node) => [node.id, node]));
-    if (nodes.size !== workspace.nodes.length)
-      ctx.addIssue({ code: "custom", message: "圖層 ID 不可重複" });
-    for (const node of workspace.nodes) {
-      let parent = node.parent;
-      const seen = new Set([node.id]);
-      while (parent) {
-        const frame = nodes.get(parent);
-        if (
-          !frame ||
-          frame.type !== "frame" ||
-          frame.page !== node.page ||
-          seen.has(parent) ||
-          seen.size > 6
-        ) {
-          ctx.addIssue({
-            code: "custom",
-            message: "圖層需位於同頁的有效面板中，不可循環或超過六層",
-          });
-          break;
-        }
-        seen.add(parent);
-        parent = frame.parent;
-      }
-    }
-  });
+  .superRefine((workspace, ctx) => validateTree(workspace.nodes, ctx));
 export const contentSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -236,6 +283,33 @@ export const contentSchema = z
     attachments: z.array(attachmentSchema).max(20),
     interactions: interactionSchema.optional(),
     design: designSchema.optional(),
+    presentation: z
+      .object({
+        logo: mediaUrl.optional(),
+        missionImage: mediaUrl.optional(),
+        missionAlt: text(160).optional(),
+        elements: z
+          .record(
+            z.string().regex(/^[a-z][a-zA-Z0-9.-]{0,79}$/),
+            appearanceSchema
+              .extend({
+                padding: z.number().min(0).max(120).optional(),
+                radius: z.number().min(0).max(40).optional(),
+                fontSize: z.number().min(8).max(120).optional(),
+                opacity: z.number().min(0.1).max(1).optional(),
+                hidden: z.boolean().optional(),
+              })
+              .strict(),
+          )
+          .refine((v) => Object.keys(v).length <= 180)
+          .optional(),
+        copy: z
+          .record(z.string().regex(/^[a-z][a-zA-Z0-9.-]{0,79}$/), text(500))
+          .refine((v) => Object.keys(v).length <= 120)
+          .optional(),
+      })
+      .strict()
+      .optional(),
     workspace: workspaceSchema.optional(),
     layout: z
       .object({
@@ -251,6 +325,7 @@ export const contentSchema = z
 export type SiteContent = z.infer<typeof contentSchema>;
 export type Project = z.infer<typeof projectSchema>;
 export type Selection =
+  | `copy:${string}`
   | "hero"
   | "about"
   | "contact"
@@ -268,15 +343,35 @@ export const credentialsSchema = z
     password2: z.string().min(12).max(200),
   })
   .strict();
-export function collectAssetIds(content: SiteContent): string[] {
+/** Only new credentials use the stronger minimum; existing logins stay compatible. */
+export const newCredentialsSchema = credentialsSchema
+  .extend({
+    password1: z.string().min(16).max(200),
+    password2: z.string().min(16).max(200),
+  })
+  .refine(
+    (value) => value.password1 !== value.password2,
+    "請使用兩組不同的密碼",
+  );
+export function collectAssetIds(
+  content: SiteContent,
+  includePresets = false,
+): string[] {
   return [
     ...new Set(
       [
         content.hero.image,
+        content.presentation?.logo || "",
+        content.presentation?.missionImage || "",
         content.music.url,
         ...content.projects.map((p) => p.image),
         ...content.attachments.map((a) => a.url),
         ...(content.workspace?.nodes.map((node) => node.image) || []),
+        ...(includePresets
+          ? content.workspace?.presets?.flatMap((p) =>
+              p.nodes.map((n) => n.image),
+            ) || []
+          : []),
       ]
         .filter((v) => v.startsWith("asset:"))
         .map((v) => v.slice(6)),
