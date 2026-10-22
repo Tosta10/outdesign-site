@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { Studio } from "./Studio";
+import { suspendRendering } from "../lib/render-visibility";
 import "../styles/editor.css";
 import "../styles/studio-workspaces.css";
 
@@ -9,6 +10,7 @@ export async function openStudio() {
   open = true;
   const target = document.getElementById("studio-root")!;
   const publicSite = document.getElementById("public-site")!;
+  suspendRendering(publicSite, true);
   const previousFocus = document.activeElement as HTMLElement;
   const previousTitle = document.title;
   document
@@ -28,6 +30,7 @@ export async function openStudio() {
         root.unmount();
         publicSite.hidden = false;
         publicSite.inert = false;
+        suspendRendering(publicSite, false);
         document.body.classList.remove("studio-active");
         document.title = previousTitle;
         open = false;

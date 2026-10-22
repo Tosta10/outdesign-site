@@ -12,6 +12,7 @@ test("author configuration round-trips through the publish schema while legacy d
   const workLab = resolveWorkLabConfig();
   workLab.parameters.cameraFollow = 32;
   workLab.parameters.coverScale = .58;
+  workLab.parameters.volume = 6;
   workLab.palette.shell = "#c8d8cd";
   workLab.effects.idleWave = false;
   const content = contentSchema.parse({ ...initialContent, workLab });

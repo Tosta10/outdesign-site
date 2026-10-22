@@ -1,4 +1,6 @@
 import { siteThemeRegression } from "./site-theme-regression.mjs";
+import { homeEffectsRegression } from "./home-effects-regression.mjs";
+import { experienceRegression } from './experience-regression.mjs';
 import { pageLoadingRegression } from "./page-loading-regression.mjs";
 import { workLabAuthorRegression } from "./work-lab-author-regression.mjs";
 import { workLabTrackingRegression } from "./work-lab-tracking-regression.mjs";
@@ -220,11 +222,14 @@ try {
   ]) {
     await page.setViewportSize(viewport);
     const copyBox = await page.locator(".hero-copy").boundingBox();
-    const featuredBox = await page.locator(".featured-card").boundingBox();
-    assert.ok(
-      featuredBox.y >= copyBox.y + copyBox.height + 20,
-      `Hero overlap at ${viewport.width}x${viewport.height}`,
-    );
+    if (await page.locator(".featured-card").count()) {
+      const featuredBox = await page.locator(".featured-card").boundingBox();
+      assert.ok(featuredBox.y >= copyBox.y + copyBox.height + 20,
+        `Hero overlap at ${viewport.width}x${viewport.height}`);
+    } else {
+      assert.equal(await page.getByRole("heading", { name: "物件研究室", exact: true }).count(), 0);
+      assert.equal(await page.locator('.mission-card').getAttribute('data-page-target'), 'work');
+    }
   }
   await page.setViewportSize({ width: 1440, height: 1080 });
   await page.goto(`${origin}/work/`, { waitUntil: "networkidle" });
@@ -308,6 +313,8 @@ try {
     password1,
     password2,
   });
+  await homeEffectsRegression({ browser, origin });
+  await experienceRegression({ browser, origin });
   await pageLoadingRegression({ browser, origin });
   await workLabRegression({ page, api, origin });
   await workLabTrackingRegression({ browser, origin });

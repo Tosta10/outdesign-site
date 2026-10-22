@@ -348,9 +348,13 @@ function Editor({
   }
   useEffect(() => {
     if (!view.current || blockMode) return;
-    const observer = new ResizeObserver(([entry]) => setCanvasWidth(entry.contentRect.width));
+    let frame = 0;
+    const observer = new ResizeObserver(([entry]) => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setCanvasWidth(entry.contentRect.width));
+    });
     observer.observe(view.current);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, [Boolean(content), blockMode]);
   const navigationClick = useCanvasNavigation(view, Boolean(content && !preview && !blockMode), zoom, setZoom, tool === "pan");
   useFreeLayout(

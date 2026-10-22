@@ -1,4 +1,4 @@
-import { labEffects } from "../../../supabase/functions/_shared/work-lab-config.ts";
+import { labEffects, labParameters } from "../../../supabase/functions/_shared/work-lab-config.ts";
 export type LabMode = "browse" | "detail" | "inspect";
 export const families = ["全部", "設計", "開發", "實驗"] as const;
 export type LabItem = {
@@ -148,8 +148,8 @@ export function normalizePreferences(
     ambient: input.ambient === true,
     volume:
       typeof input.volume === "number" && Number.isFinite(input.volume)
-        ? Math.max(0, Math.min(0.3, input.volume))
-        : 0.12,
+        ? Math.max(1.5, Math.min(labParameters.volume.max, input.volume))
+        : 3,
   };
 }
 

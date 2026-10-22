@@ -9,7 +9,13 @@ export function applySiteTheme(root: Document | HTMLElement, theme: SiteTheme) {
     const site = root.closest<HTMLElement>(".site");
     if (site) sites.push(site);
   }
-  sites.forEach(site => { site.dataset.siteTheme = theme; });
+  sites.forEach(site => {
+    site.dataset.siteTheme = theme;
+    site.querySelectorAll<HTMLImageElement>('img[data-theme-light-src]').forEach(image => {
+      const source = theme === 'light' ? image.dataset.themeLightSrc : image.dataset.themeDarkSrc;
+      if (source && image.getAttribute('src') !== source) image.src = source;
+    });
+  });
   root.querySelectorAll<HTMLSelectElement>("[data-site-theme-select]").forEach(select => { select.value = theme; });
   if (root === document || root instanceof HTMLElement && !root.closest(".editor-shell,.scratch-studio")) document.documentElement.dataset.siteTheme = theme;
 }

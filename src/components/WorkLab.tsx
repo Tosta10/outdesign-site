@@ -1,3 +1,4 @@
+import { BootGraphic } from "./BootGraphic";
 import { useEffect, useRef, type CSSProperties } from "react";
 import { elementProps, presentationCopy } from "../lib/presentation";
 import { resolveWorkLabConfig } from "../../supabase/functions/_shared/work-lab-config";
@@ -79,7 +80,7 @@ export function WorkLab({
           <button {...layer("action-saved-1")} data-lab-action="saved" aria-label="檢視收藏作品">
             {copy("saved")}  <span data-lab-saved-count>00</span>
           </button>
-          <button {...layer("menu")} data-menu-toggle aria-controls="site-navigation" aria-expanded="false" aria-label="開啟選單"><span aria-hidden="true">☰</span><small>{copy("menu")}</small></button>
+          <button {...layer("menu")} className="navigation-trigger" data-menu-toggle aria-controls="site-navigation" aria-expanded="false" aria-label="開啟選單"><span aria-hidden="true">☰</span><small>{copy("menu")}</small></button>
           <button {...layer("action-fullscreen-1")} data-lab-action="fullscreen" aria-label="全螢幕作品展示">
             ⤢
           </button>
@@ -376,16 +377,7 @@ export function WorkLab({
         </footer>
       </div>
       <div className="lab-boot" hidden>
-        <button {...layer("action-skip-1")} data-lab-action="skip">略過開場 ↗</button>
-        <svg viewBox="0 0 160 160" aria-hidden="true">
-          <path d="M80 12 148 80 80 148 12 80Z" />
-          <path d="M80 40 120 80 80 120 40 80Z" />
-          <circle cx="80" cy="80" r="54" />
-        </svg>
-        <span data-lab-boot-text>INITIALIZING OBJECT SPACE</span>
-        <div>
-          <i />
-        </div>
+        <BootGraphic />
       </div>
       <dialog
         className="lab-modal"
@@ -428,16 +420,18 @@ export function WorkLab({
         <div className="lab-search-results" data-lab-results />
       </dialog>
       <dialog
-        className="lab-modal"
+        className="lab-modal experience-settings"
         data-lab-modal="settings"
         aria-labelledby="od-lab-settings-title"
       >
         <header>
-          <h3 id="od-lab-settings-title">SYSTEM PREFERENCES / 展示設定</h3>
+          <div><span className="settings-eyebrow">ARCHIVE PREFERENCES</span><h3 id="od-lab-settings-title">沉浸，依你所好</h3></div>
           <button data-lab-close aria-label="關閉展示設定">
             ×
           </button>
         </header>
+        <p className="settings-intro">為作品選一種光線，為探索留一點聲音。</p>
+        <h4 className="settings-section">01 / 畫面與動態</h4>
         <label>
           全站配色
           <select data-lab-setting="theme">
@@ -475,6 +469,7 @@ export function WorkLab({
           <input data-lab-setting="motion" type="checkbox" />
           動態效果
         </label>
+        <h4 className="settings-section">02 / 聲音與氛圍</h4>
         <label className="lab-check">
           <input data-lab-setting="sound" type="checkbox" />
           互動音效
@@ -484,15 +479,21 @@ export function WorkLab({
           合成環境音
         </label>
         <label>
-          音量
+          音場強度 <output data-lab-volume-value>10×</output>
           <input
             data-lab-setting="volume"
+            aria-label="音場強度"
             type="range"
             min="0"
-            max="0.3"
-            step="0.01"
+            max="100"
+            step="1"
           />
         </label>
+        <div className="volume-presets" role="group" aria-label="音場強度預設">
+          <button data-lab-volume-preset="1.5" aria-pressed="false">5× <span>輕柔</span></button>
+          <button data-lab-volume-preset="3" aria-pressed="true">10× <span>均衡</span></button>
+          <button data-lab-volume-preset="6" aria-pressed="false">20× <span>飽滿</span></button>
+        </div>
         <p>
           配色會同步至全站所有頁面。音訊在啟用後由瀏覽器即時合成；不載入音檔。動態效果遵循系統的減少動態設定。
         </p>

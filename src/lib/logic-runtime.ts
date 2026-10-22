@@ -1,4 +1,5 @@
 import { sendLabCommand } from "./work-lab/bridge";
+import { reducedSiteMotion } from "./site-motion";
 import type {
   LogicBlock,
   LogicScript,
@@ -49,7 +50,6 @@ export function initLogic(
       });
     }
   };
-  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const listen = (el: EventTarget, event: string, fn: EventListener) =>
     el.addEventListener(event, fn, { signal: lifetime.signal });
   function targetFor(script: LogicScript) {
@@ -223,7 +223,7 @@ export function initLogic(
             ],
           };
           const animation = el.animate(frames[b.value] || frames.fade, {
-            duration: reduced ? 0 : Math.max(0.05, b.duration) * 1000,
+              duration: reducedSiteMotion(root) ? 0 : Math.max(0.05, b.duration) * 1000,
             easing: "cubic-bezier(.16,1,.3,1)",
           });
           animations.add(animation);

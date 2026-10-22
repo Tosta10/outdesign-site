@@ -122,7 +122,7 @@ test("motion envelopes remain bounded and preferences honor system motion settin
       .motion,
     false,
   );
-  assert.equal(normalizePreferences({ volume: 5 }).volume, 0.3);
+  assert.equal(normalizePreferences({ volume: 10 }).volume, 6);
   assert.equal(normalizePreferences({ quality: "invalid" }).quality, "medium");
 });
 

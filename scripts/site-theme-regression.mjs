@@ -40,7 +40,8 @@ export async function siteThemeRegression({ page, origin }) {
       return [...ctx.getImageData(0, 0, 1, 1).data];
     });
     assert.ok(surface.slice(0, 3).every(value => value > 180), "Touch-device glass surfaces follow the light palette instead of a forced dark fallback");
-    assert.ok(Number(await mobile.locator(".lunar-backdrop").evaluate(element => getComputedStyle(element).opacity)) < .2, "The light home background does not obscure its dark text");
+    assert.ok((await mobile.locator('.lunar-backdrop').getAttribute('src')).includes('lunar-dawn-light.webp'), 'Light mode uses its dedicated moon artwork');
+    assert.ok(Number(await mobile.locator(".lunar-backdrop").evaluate(element => getComputedStyle(element).opacity)) > .8, "The purpose-made light artwork retains its detail");
     const axe = await new AxeBuilder({ page: mobile }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
     assert.deepEqual(axe.violations.filter(v => ["serious", "critical"].includes(v.impact)), [], "The light touch layout remains readable");
     await mobile.screenshot({ path: "artifacts/site-light-mobile-home.png", fullPage: true });
