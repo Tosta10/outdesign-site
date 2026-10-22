@@ -15,7 +15,7 @@ export async function workLabTrackingRegression({ browser, origin }) {
   for (let n = 0; n < 100; n++) {
     await page.keyboard.down("ArrowDown");
     await page.waitForTimeout(25);
-    held.push(await stage.evaluate(el => ({ error: +el.dataset.trackingError, dt: +el.dataset.frameDelta, position: el.dataset.arrayPosition })));
+    held.push(await stage.evaluate(el => ({ error: +el.dataset.trackingError, dt: +el.dataset.frameDelta, position: el.dataset.arrayPosition, velocity: Number(el.dataset.trackVelocity.split(",")[1]) })));
   }
   await page.keyboard.up("ArrowDown");
   assert.ok(Number(await stage.getAttribute("data-movement-pulses")) > 15, "Repeated movement produces waves before selection standby completes");
@@ -23,6 +23,7 @@ export async function workLabTrackingRegression({ browser, origin }) {
   const waveAhead = (await stage.getAttribute("data-wave-ahead")).split(",").map(Number);
   assert.ok(waveAhead[1] - waveOrigin[1] > 5.9, "Scrolling prepares a wave six rows ahead in the actual travel direction");
   assert.ok(Math.max(...held.slice(4).map(n => n.error)) < 1.25, "Held navigation responds within one adjacent cell instead of accumulating spring lag");
+  assert.ok(held.slice(8).filter(sample => Math.abs(sample.velocity) > .5).length > 70, "Held navigation keeps moving between key repeats instead of zeroing its velocity");
   await page.waitForFunction(() => +document.querySelector(".lab-stage").dataset.trackingError < .015);
   const bounds = await stage.boundingBox();
   await page.mouse.move(bounds.x + bounds.width * .35, bounds.y + bounds.height * .45);

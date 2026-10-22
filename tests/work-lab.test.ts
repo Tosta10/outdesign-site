@@ -14,7 +14,23 @@ import {
   wrap,
 } from "../src/lib/work-lab/state.ts";
 import { initialContent } from "../supabase/functions/_shared/seed.ts";
-import { aheadCell } from "../src/lib/work-lab/motion.ts";
+import { aheadCell, dampMoving } from "../src/lib/work-lab/motion.ts";
+test("moving-track spring retains velocity while following a held key and braking", () => {
+  const state = { value: 0, velocity: 0 };
+  const dt = 1 / 60, speed = 30;
+  const speeds: number[] = [];
+  for (let n = 1; n <= 120; n++) {
+    dampMoving(state, speed * n * dt, speed, 24, dt);
+    if (n > 20) speeds.push(state.velocity);
+  }
+  assert.ok(Math.max(...speeds) - Math.min(...speeds) < .1, "Steady input has a continuous velocity instead of restarting from zero");
+  assert.ok(Math.abs(state.value - 60) < .001);
+  const before = state.value;
+  dampMoving(state, 60, 0, 24, dt);
+  assert.ok(state.value > before && state.velocity > 0, "Release brakes the existing motion rather than snapping its velocity");
+  for (let n = 0; n < 120; n++) dampMoving(state, 60, 0, 24, dt);
+  assert.ok(Math.abs(state.value - 60) < .001 && Math.abs(state.velocity) < .001);
+});
 test("look-ahead waves follow forward, reverse and diagonal archive navigation", () => {
   const cell = { lane: 3, row: 8 };
   assert.deepEqual(aheadCell(cell, { lane: 0, row: 2 }, 6), { lane: 3, row: 14 });

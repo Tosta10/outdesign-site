@@ -125,3 +125,13 @@ export function damp(s: Spring, target: number, rate: number, dt: number) {
   s.value = target + (delta + impulse * dt) * decay;
   s.velocity = (s.velocity - rate * impulse * dt) * decay;
 }
+
+/** The source spring in a moving target's frame: retain velocity without a
+ * growing distance lag during a held key. Position and velocity stay continuous. */
+export function dampMoving(s: Spring, target: number, velocity: number, rate: number, dt: number) {
+  s.value -= target - velocity * dt;
+  s.velocity -= velocity;
+  damp(s, 0, rate, dt);
+  s.value += target;
+  s.velocity += velocity;
+}

@@ -22,6 +22,7 @@ import {
 } from "./state";
 import {
   damp,
+  dampMoving,
   baselineSelectionWave,
   aheadCell,
   idleWave,
@@ -32,6 +33,8 @@ import {
 export type SceneState = {
   pointerActive: boolean;
   navigationUntil: number;
+  navigationTime: number;
+  navigationVelocity: { lane: number; row: number };
   config: WorkLabConfig;
   authoring?: boolean;
   items: LabItem[];
@@ -268,6 +271,7 @@ export function createLabScene(
     zoom = 1;
   const laneSpring = { value: state.lane, velocity: 0 },
     rowSpring = { value: state.row, velocity: 0 };
+  let fastSettling = false;
   const shoulder = { value: state.row, velocity: 0 },
     laneFocus = { value: state.lane, velocity: 0 },
     lift = { value: 0, velocity: 0 };
@@ -296,7 +300,8 @@ export function createLabScene(
     rotation: { x: number; y: number };
   };
   const outgoing: Returning[] = [];
-  let pulses: { lane: number; row: number; time: number; ahead?: { lane: number; row: number } }[] = [],
+  type Pulse = { lane: number; row: number; time: number; ahead?: { lane: number; row: number }; retired?: number };
+  let pulses: Pulse[] = [], fadingPulses: Pulse[] = [],
     idleGain = 0,
     observedWave = state.wave,
     lastInteraction = performance.now(),
@@ -470,14 +475,20 @@ export function createLabScene(
       laneSpring.velocity = rowSpring.velocity = 0;
       lastInteraction = now;
     } else {
-      // Repeated keys / rapid wheel input get a shorter catch-up without snapping
-      // the array. Pointer drag itself already owns the exact projected coordinate.
       if (trackMotion && now < state.navigationUntil) {
-        // Held navigation owns the track, as pointer/coasting navigation does in
-        // the source. One short exponential response avoids stacked spring lag.
-        laneSpring.value = relax(laneSpring.value, state.lane, dt, p.cameraFollow * 4);
-        rowSpring.value = relax(rowSpring.value, state.row, dt, p.cameraFollow * 4);
-        laneSpring.velocity = rowSpring.velocity = 0;
+        fastSettling = true;
+        const speed = Math.max(Math.abs(state.navigationVelocity.lane), Math.abs(state.navigationVelocity.row));
+        const horizon = Math.min(.05, .85 / Math.max(1, speed));
+        const elapsed = Math.max(0, (now - state.navigationTime) / 1000);
+        const prediction = Math.min(horizon, elapsed);
+        for (const [spring, axis] of [[laneSpring, "lane"], [rowSpring, "row"]] as const) {
+          const velocity = state.navigationVelocity[axis];
+          dampMoving(spring, state[axis] + velocity * prediction, elapsed < horizon ? velocity : 0, p.cameraFollow, dt);
+        }
+      } else if (trackMotion && fastSettling) {
+        damp(laneSpring, state.lane, p.cameraFollow, dt);
+        damp(rowSpring, state.row, p.cameraFollow, dt);
+        if (Math.hypot(laneSpring.value - state.lane, rowSpring.value - state.row) < .005 && Math.hypot(laneSpring.velocity, rowSpring.velocity) < .05) fastSettling = false;
       } else {
         damp(laneSpring, state.lane, trackMotion ? p.selectionSpeed : 1000, dt);
         damp(rowSpring, state.row, trackMotion ? p.selectionSpeed : 1000, dt);
@@ -486,6 +497,7 @@ export function createLabScene(
     lane = laneSpring.value;
     row = rowSpring.value;
     host.dataset.frameDelta = String(dt);
+    host.dataset.trackVelocity = `${laneSpring.velocity},${rowSpring.velocity}`;
     host.dataset.trackingError = String(Math.hypot(lane - (state.track?.lane ?? state.lane), row - (state.track?.row ?? state.row)));
     damp(shoulder, state.row, trackMotion ? p.shoulderSpeed : 1000, dt);
     damp(laneFocus, state.lane, trackMotion ? p.columnSpeed : 1000, dt);
@@ -598,7 +610,11 @@ export function createLabScene(
         host.dataset.movementPulses = String(Number(host.dataset.movementPulses || 0) + 1);
       }
     }
-    pulses = pulses.slice(-6).filter((pulse) => now - pulse.time < 3200);
+    while (pulses.length > 6) fadingPulses.push({ ...pulses.shift()!, retired: now });
+    pulses = pulses.filter(pulse => now - pulse.time < 3200);
+    fadingPulses = fadingPulses.slice(-6).filter(pulse => now - pulse.retired! < 160);
+    const activePulses = motionAllowed(state.preferences, "selectionWave")
+      ? [...pulses, ...fadingPulses].map(pulse => ({ ...pulse, gain: pulse.retired === undefined ? 1 : 1 - smooth((now - pulse.retired) / 160) })) : [];
     const resting = state.mode === "browse" && !state.pointerActive && !state.track && now - lastInteraction > 1200;
     idleGain = relax(
       idleGain,
@@ -613,16 +629,15 @@ export function createLabScene(
         0.65;
       if (!motion) return shoulderHeight;
       let ripple = 0;
-      for (const pulse of motionAllowed(state.preferences, "selectionWave")
-        ? pulses
-        : []) {
-        ripple += baselineSelectionWave(
+      for (const pulse of activePulses) {
+        const age = (now - pulse.time) / 1000 * p.waveSpeed;
+        ripple += pulse.gain * baselineSelectionWave(
           Math.hypot(r - pulse.row, (l - pulse.lane) * 2.2),
-          (now - pulse.time) / 1000 * p.waveSpeed,
+          age,
         );
-        if (pulse.ahead) ripple += .65 * baselineSelectionWave(
+        if (pulse.ahead) ripple += pulse.gain * .65 * smooth(age / .1) * baselineSelectionWave(
           Math.hypot(r - pulse.ahead.row, (l - pulse.ahead.lane) * 2.2),
-          (now - pulse.time) / 1000 * p.waveSpeed + .08,
+          age + .08,
         );
       }
       return (
