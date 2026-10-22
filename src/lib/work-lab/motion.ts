@@ -135,3 +135,10 @@ export function dampMoving(s: Spring, target: number, velocity: number, rate: nu
   s.value += target;
   s.velocity += velocity;
 }
+
+/** Follow one archive axis using the bounded prediction used by the renderer. */
+export function followNavigation(s: Spring, target: number, velocity: number, speed: number, elapsed: number, rate: number, dt: number) {
+  const horizon = Math.min(.05, .85 / Math.max(1, speed));
+  const age = Math.max(0, elapsed);
+  dampMoving(s, target + velocity * Math.min(horizon, age), age < horizon ? velocity : 0, rate, dt);
+}

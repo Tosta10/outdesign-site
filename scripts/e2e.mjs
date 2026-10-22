@@ -79,6 +79,9 @@ try {
   await mkdir("artifacts", { recursive: true });
   browser = await chromium.launch({
     headless: true,
+    args: process.env.OUTDESIGN_TEST_SOFTWARE_GPU === "true"
+      ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+      : [],
     channel:
       process.env.PLAYWRIGHT_CHANNEL ||
       (process.platform === "win32" ? "msedge" : undefined),

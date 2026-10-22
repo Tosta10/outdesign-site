@@ -14,7 +14,37 @@ import {
   wrap,
 } from "../src/lib/work-lab/state.ts";
 import { initialContent } from "../supabase/functions/_shared/seed.ts";
-import { aheadCell, dampMoving } from "../src/lib/work-lab/motion.ts";
+import { aheadCell, dampMoving, followNavigation, damp } from "../src/lib/work-lab/motion.ts";
+
+test("renderer navigation preserves velocity between repeats at 30/60/120 Hz and bounds slow-frame prediction", () => {
+  for (const hz of [30, 60, 120]) {
+    const spring = { value: 0, velocity: 0 };
+    const samples: number[] = [];
+    let maxError = 0;
+    for (let frame = 1; frame <= hz * 3; frame++) {
+      const time = frame / hz;
+      const target = Math.floor(time * 30 + 1e-7);
+      followNavigation(spring, target, 30, 30, time - target / 30, 24, 1 / hz);
+      if (time > .3) {
+        samples.push(spring.velocity);
+        maxError = Math.max(maxError, Math.abs(spring.value - target));
+      }
+    }
+    assert.ok(samples.every(speed => speed > .5), `${hz} Hz must not zero velocity between repeats`);
+    assert.ok(maxError < 1.25);
+    const before = spring.value;
+    damp(spring, 90, 24, 1 / hz);
+    assert.ok(Math.abs(spring.value - before) < 1.25, "Release keeps position continuous");
+    for (let frame = 0; frame < hz * 2; frame++) damp(spring, 90, 24, 1 / hz);
+    assert.ok(Math.abs(spring.value - 90) < .001 && Math.abs(spring.velocity) < .001);
+  }
+  for (const dt of [.1, .25, .5, 1]) {
+    const spring = { value: 0, velocity: 30 };
+    followNavigation(spring, 30, 60, 60, dt, 24, dt);
+    assert.ok(Number.isFinite(spring.velocity));
+    assert.ok(spring.value <= 30.85, "A late frame cannot extrapolate past the prediction budget");
+  }
+});
 test("moving-track spring retains velocity while following a held key and braking", () => {
   const state = { value: 0, velocity: 0 };
   const dt = 1 / 60, speed = 30;
