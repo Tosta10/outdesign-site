@@ -25,10 +25,10 @@ export async function workLabTrackingRegression({ browser, origin }) {
     el.addEventListener("keydown", () => { started = true; }, { once: true });
     const observer = new MutationObserver(() => {
       if (!started) return;
-      held.push({ error: +el.dataset.trackingError, dt: +el.dataset.frameDelta, position: el.dataset.arrayPosition, velocity: Number(el.dataset.trackVelocity.split(",")[1]), frame: +el.dataset.frames });
+      held.push({ error: +el.dataset.trackingError, dt: +el.dataset.frameDelta, position: el.dataset.arrayPosition, velocity: Number(el.dataset.trackVelocity.split(",")[1]), frame: +el.dataset.frames, repeats: el.trackingProbe.repeats });
     });
     observer.observe(el, { attributes: true, attributeFilter: ["data-frames"] });
-    el.trackingProbe = { held, observer };
+    el.trackingProbe = { held, observer, repeats: 0 };
   });
   // Use a native first press/release and schedule repeat events next to the
   // renderer. A protocol round trip per repeat can take hundreds of ms under
@@ -37,6 +37,7 @@ export async function workLabTrackingRegression({ browser, origin }) {
   const held = await stage.evaluate(async el => {
     for (let n = 0; n < 100; n++) {
       await new Promise(resolve => setTimeout(resolve, 25));
+      el.trackingProbe.repeats++;
       el.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", repeat: true, bubbles: true, cancelable: true }));
     }
     el.trackingProbe.observer.disconnect();
@@ -49,7 +50,9 @@ export async function workLabTrackingRegression({ browser, origin }) {
   const waveOrigin = (await stage.getAttribute("data-wave-origin")).split(",").map(Number);
   const waveAhead = (await stage.getAttribute("data-wave-ahead")).split(",").map(Number);
   assert.ok(waveAhead[1] - waveOrigin[1] > 5.9, "Scrolling prepares a wave six rows ahead in the actual travel direction");
-  assert.ok(Math.max(...held.slice(4).map(n => n.error)) < 1.25, "Held navigation responds within one adjacent cell instead of accumulating spring lag");
+  const sustained = held.filter(sample => sample.repeats >= 8);
+  assert.ok(sustained.length >= 8, "Sustained input must be rendered after its initial acceleration");
+  assert.ok(Math.max(...sustained.map(n => n.error)) < 1.25, "Held navigation responds within one adjacent cell instead of accumulating spring lag");
   // Software renderers may produce fewer frames than the key-repeat rate. A
   // frame after the 50 ms prediction window is correctly allowed to settle.
   // Check real rendered travel here; inter-repeat velocity is checked against
