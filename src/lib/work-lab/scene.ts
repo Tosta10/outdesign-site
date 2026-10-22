@@ -117,6 +117,8 @@ export function createLabScene(
   scene.add(floor);
   const count = layout.lanes * layout.rows,
     dummy = new T.Object3D();
+  const cellMatrix = new T.Matrix4(),
+    componentMatrix = new T.Matrix4();
   const shell = new T.MeshStandardMaterial({
     color: 0xe1dcd1,
     metalness: 0.04,
@@ -522,7 +524,13 @@ export function createLabScene(
       (state.row - row) * layout.rowGap,
     );
     if (state.mode === "inspect") model.object.position.set(0, 0, 0);
-    model.object.rotation.set(turnX * blend, turnY * blend, 0);
+    const modelSlope =
+      (field(state.row + 0.5, state.lane) -
+        field(state.row - 0.5, state.lane)) *
+      0.024 *
+      (1 - blend) *
+      (1 - smooth(lift.value / 0.4));
+    model.object.rotation.set(modelSlope + turnX * blend, turnY * blend, 0);
     for (let i = outgoing.length - 1; i >= 0; i--) {
       const old = outgoing[i];
       old.model.object.visible = state.mode !== "inspect";
@@ -596,25 +604,43 @@ export function createLabScene(
         const px = (l - lane) * layout.columnGap,
           py = field(r, l) + hoverLift(l, r),
           pz = (r - row) * layout.rowGap;
+        const tilt =
+          (field(r + 0.5, l) - field(r - 0.5, l)) * 0.024 * (1 - detail);
         dummy.position.set(px, py, pz);
-        dummy.rotation.set(0, 0, 0);
+        dummy.rotation.set(tilt, 0, 0);
         dummy.scale.setScalar(isSelected ? 0 : 1);
         dummy.updateMatrix();
-        body.setMatrixAt(index, dummy.matrix);
-        dummy.position.y += layout.height / 2;
-        dummy.updateMatrix();
-        edges.setMatrixAt(index, dummy.matrix);
-        dummy.position.set(px, py, pz + layout.depth / 2 + 0.006);
-        dummy.updateMatrix();
-        artwork.setMatrixAt(index, dummy.matrix);
+        cellMatrix.copy(dummy.matrix);
+        body.setMatrixAt(index, cellMatrix);
+        // Every component uses the same physical cell transform, including its slope.
+        const component = (
+          mesh: T.InstancedMesh,
+          slot: number,
+          x: number,
+          y: number,
+          z: number,
+          rotation = 0,
+        ) => {
+          dummy.position.set(x, y, z);
+          dummy.rotation.set(rotation, 0, 0);
+          dummy.scale.setScalar(1);
+          dummy.updateMatrix();
+          componentMatrix.multiplyMatrices(cellMatrix, dummy.matrix);
+          mesh.setMatrixAt(slot, componentMatrix);
+        };
+        component(edges, index, 0, layout.height / 2, 0);
+        component(artwork, index, 0, 0, layout.depth / 2 + 0.006);
         const columnItems = columns[wrap(l, columns.length)].items;
         indices[index] = columnItems[wrap(r, columnItems.length)].id;
-        for (let pin = 0; pin < 2; pin++) {
-          dummy.position.set(px + (pin ? 1.57 : -1.57), py + 1.33, pz + 0.135);
-          dummy.rotation.set(Math.PI / 2, 0, 0);
-          dummy.updateMatrix();
-          pins.setMatrixAt(index * 2 + pin, dummy.matrix);
-        }
+        for (let pin = 0; pin < 2; pin++)
+          component(
+            pins,
+            index * 2 + pin,
+            pin ? 1.57 : -1.57,
+            1.33,
+            0.135,
+            Math.PI / 2,
+          );
         index++;
       }
     for (const mesh of [body, edges, pins, artwork])
