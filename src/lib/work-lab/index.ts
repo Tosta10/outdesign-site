@@ -64,6 +64,8 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
   const state: SceneState = {
     pointerActive: false,
     navigationUntil: 0,
+    navigationTime: 0,
+    navigationVelocity: { lane: 0, row: 0 },
     config: baseConfig,
     authoring,
     items: allItems,
@@ -395,9 +397,23 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
     scene?.invalidate();
   }
   let lastNavigation = -Infinity;
-  function select(lane: number, row: number, open = false) {
+  function select(lane: number, row: number, open = false, repeat = false) {
     const now = performance.now();
-    if (now - lastNavigation < 120) state.navigationUntil = now + 200;
+    const interval = (now - lastNavigation) / 1000;
+    const direction = { lane: lane - state.lane, row: row - state.row };
+    if (!open && (repeat || interval > .008 && interval < .14)) {
+      const period = Math.max(.016, Math.min(.2, repeat && interval > .3 ? 1 / 30 : interval));
+      const gain = now < state.navigationUntil ? .65 : 1;
+      for (const axis of ["lane", "row"] as const) {
+        const velocity = Math.max(-60, Math.min(60, direction[axis] / period));
+        state.navigationVelocity[axis] += (velocity - state.navigationVelocity[axis]) * gain;
+      }
+      state.navigationUntil = now + Math.max(150, period * 2500);
+    } else {
+      state.navigationVelocity = { lane: 0, row: 0 };
+      state.navigationUntil = 0;
+    }
+    state.navigationTime = now;
     lastNavigation = now;
     cancelAnimationFrame(coastFrame);
     rollingDirection = (row !== state.row ? row > state.row : lane > state.lane)
@@ -415,7 +431,7 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
       audio.tick(itemAtCell(state.items, state.lane, state.row).id);
     status.textContent = `${itemAtCell(state.items, state.lane, state.row).title} · Enter 探索，方向鍵切換。`;
   }
-  function stepColumn(direction: number) {
+  function stepColumn(direction: number, repeat = false) {
     const columns = archiveColumns(state.items),
       previous = columns[wrap(state.lane, columns.length)];
     columnMemory.set(previous.label, state.row);
@@ -426,7 +442,7 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
       remembered +
       Math.round((state.row - remembered) / next.items.length) *
         next.items.length;
-    select(lane, row);
+    select(lane, row, false, repeat);
   }
   function navigatePlane(coordinate: { lane: number; row: number }) {
     const previous = state.track ?? { lane: state.lane, row: state.row };
@@ -448,6 +464,8 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
     } else scene?.invalidate();
   }
   function mode(value: LabMode) {
+    state.navigationUntil = 0;
+    state.navigationVelocity = { lane: 0, row: 0 };
     if (state.mode === "inspect" && value !== "inspect") {
       state.exploded = false;
       state.frosted = false;
@@ -884,14 +902,15 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
       return;
     e.preventDefault();
     if (state.mode === "browse") {
-      if (e.repeat) state.navigationUntil = performance.now() + 220;
       if (e.key === "ArrowLeft" || e.key === "ArrowRight")
-        stepColumn(e.key === "ArrowLeft" ? -1 : 1);
+        stepColumn(e.key === "ArrowLeft" ? -1 : 1, e.repeat);
       else
         select(
           state.lane,
           state.row +
             (e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0),
+          false,
+          e.repeat,
         );
     } else {
       if (state.mode === "inspect") {
@@ -917,6 +936,13 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
     }
   };
   root.addEventListener("keydown", keyboard, { signal: abort.signal });
+  root.addEventListener("keyup", event => {
+    if (event.key.startsWith("Arrow")) {
+      state.navigationUntil = 0;
+      state.navigationVelocity = { lane: 0, row: 0 };
+      scene?.invalidate();
+    }
+  }, { signal: abort.signal });
   const archiveDrag = new ArchiveDrag();
   let drag: {
     id: number;
