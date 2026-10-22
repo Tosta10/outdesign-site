@@ -301,29 +301,38 @@ export async function workLabRegression({ page, api, origin }) {
   const motionProof = [];
   for (const key of ["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"]) {
     await page.waitForTimeout(1400);
-    const before = await stage.getAttribute("data-array-position");
+    // Observe before input: a software renderer may finish the transition while
+    // separate protocol reads wait for its main thread. Retain real render samples.
+    const before = await stage.evaluate(element => {
+      element.motionSamples = [];
+      element.motionObserver?.disconnect();
+      element.motionObserver = new MutationObserver(() => {
+        element.motionSamples.push(element.dataset.arrayPosition);
+        if (element.motionSamples.length > 120) element.motionSamples.shift();
+      });
+      element.motionObserver.observe(element, { attributes: true, attributeFilter: ["data-array-position"] });
+      return element.dataset.arrayPosition;
+    });
     await page.keyboard.press(key);
-    const target = [
-      Number(await root.getAttribute("data-lane")),
-      Number(await root.getAttribute("data-row")),
-    ];
+    const target = await root.evaluate(element => [Number(element.dataset.lane), Number(element.dataset.row)]);
     const axis = key === "ArrowRight" || key === "ArrowLeft" ? 0 : 1;
     await page.waitForFunction(
       ({ before, target, axis }) => {
-        const values =
-          document
-            .querySelector(".lab-stage")
-            ?.getAttribute("data-array-position")
-            ?.split(",")
-            .map(Number) || [];
-        return (
-          Math.abs(values[axis] - Number(before.split(",")[axis])) > 0.002 &&
-          Math.abs(values[axis] - target[axis]) > 0.002
-        );
+        const samples = document.querySelector(".lab-stage")?.motionSamples || [];
+        return samples.some(sample => {
+          const values = sample.split(",").map(Number);
+          return Math.abs(values[axis] - Number(before.split(",")[axis])) > 0.002 &&
+            Math.abs(values[axis] - target[axis]) > 0.002;
+        });
       },
       { before, target, axis },
     );
-    const middle = await stage.getAttribute("data-array-position");
+    const middle = await stage.evaluate((element, { before, target, axis }) =>
+      element.motionSamples.find(sample => {
+        const values = sample.split(",").map(Number);
+        return Math.abs(values[axis] - Number(before.split(",")[axis])) > 0.002 &&
+          Math.abs(values[axis] - target[axis]) > 0.002;
+      }), { before, target, axis });
     await page.waitForFunction(
       ({ target, axis }) => {
         const values =
@@ -346,6 +355,7 @@ export async function workLabRegression({ page, api, origin }) {
       target,
       settled: await stage.getAttribute("data-array-position"),
     });
+    await stage.evaluate(element => { element.motionObserver.disconnect(); delete element.motionSamples; delete element.motionObserver; });
   }
   await writeFile(
     "artifacts/work-motion-proof.json",

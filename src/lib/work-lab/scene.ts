@@ -56,11 +56,23 @@ export function createLabScene(
   progress: (value: number) => void,
 ) {
   const canvas = host.querySelector<HTMLCanvasElement>("canvas")!;
+  const thumbnail = Boolean(state.authoring && host.ownerDocument !== document);
+  // Sandboxed portal frames can retain a valid WebGL buffer while omitting its
+  // compositor layer. A small raster surface makes the passive preview reliable.
+  const previewSurface = thumbnail ? host.ownerDocument.createElement("img") : null;
+  if (previewSurface) {
+    previewSurface.alt = "";
+    previewSurface.setAttribute("aria-hidden", "true");
+    previewSurface.dataset.labRenderSnapshot = "true";
+    Object.assign(previewSurface.style, { position: "absolute", inset: "0", width: "100%", height: "100%", pointerEvents: "none" });
+    canvas.after(previewSurface);
+  }
+  let previewCaptured = -Infinity;
   const renderer = new T.WebGLRenderer({
     canvas,
     antialias: true,
     alpha: true,
-    preserveDrawingBuffer: Boolean(state.authoring && host.ownerDocument !== document),
+    preserveDrawingBuffer: thumbnail,
     powerPreference: "low-power",
   });
   const gl = renderer.getContext(),
@@ -343,7 +355,7 @@ export function createLabScene(
       renderer.setPixelRatio(
         Math.min(
           devicePixelRatio,
-          software
+          thumbnail ? .35 : software
             ? 0.5
             : quality === "high"
               ? 1.75
@@ -815,6 +827,13 @@ export function createLabScene(
           camera.position.distanceTo(aim);
       composer.render(dt);
     } else renderer.render(scene, camera);
+    if (previewSurface && now - previewCaptured >= 200) {
+      previewCaptured = now;
+      try {
+        previewSurface.src = canvas.toDataURL("image/jpeg", .75);
+        previewSurface.dataset.ready = "true";
+      } catch { /* Keep the last successful passive frame. */ }
+    }
     const projected = model.object.position.clone().project(camera);
     host.dataset.selectedScreen = `${(((projected.x + 1) * width) / 2).toFixed(1)},${(((1 - projected.y) * height) / 2).toFixed(1)}`;
     host.dataset.cameraPosition = camera.position
@@ -1036,6 +1055,7 @@ export function createLabScene(
       light.shadow.map?.dispose();
       environment.dispose();
       disposeObject(scene);
+      previewSurface?.remove();
       renderer.dispose();
       host.dataset.ready = "false";
     },

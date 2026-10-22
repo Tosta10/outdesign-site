@@ -34,6 +34,9 @@ export async function workLabAuthorRegression({ page, api, password1, password2 
   assert.equal(draft.content.workLab.palette.shell, "#b5c9bc");
   assert.equal(draft.content.presentation.copy["lab.menu"], "探索導航");
   await label("切換模式").selectOption("blocks");
+  const mini = page.frameLocator('iframe[title="積木即時預覽"]');
+  await mini.locator('[data-lab-render-snapshot][data-ready="true"]').waitFor();
+  await mini.locator('[data-lab-render-snapshot]').evaluate(image => image.decode());
   await page.getByRole("tab", { name: "作品展示", exact: true }).click();
   assert.equal(await page.locator(".library-scratch-block").count(), 5);
   await page.getByRole("tab", { name: "物件圖層", exact: true }).click();
