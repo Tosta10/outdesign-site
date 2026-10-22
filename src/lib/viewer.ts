@@ -4,8 +4,8 @@ export function initViewer(root: Document | HTMLElement): () => void {
   const disposeEffects = initEffects(root);
   const abort = new AbortController();
   const workLabs: (() => void)[] = [];
-  root.querySelectorAll<HTMLElement>("[data-work-lab]").forEach((element) => {
-    import("./work-lab/index").then(async ({ initWorkLab }) => {
+  const workReady = [...root.querySelectorAll<HTMLElement>("[data-work-lab]")].map(async (element) => {
+    return await import("./work-lab/index").then(async ({ initWorkLab }) => {
       if (abort.signal.aborted) return;
       const dispose = await initWorkLab(element);
       if (abort.signal.aborted) dispose(); else workLabs.push(dispose);
@@ -15,7 +15,8 @@ export function initViewer(root: Document | HTMLElement): () => void {
   const logicSource = root.querySelector("[data-site-logic]")?.textContent;
   if (logicSource)
     import("./logic-runtime")
-      .then(({ initLogic }) => {
+      .then(async ({ initLogic }) => {
+        await Promise.all(workReady);
         if (!abort.signal.aborted) {
           try {
             disposeLogic = initLogic(root, JSON.parse(logicSource));

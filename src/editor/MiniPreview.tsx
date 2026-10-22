@@ -51,7 +51,7 @@ export const MiniPreview = memo(function MiniPreview(props: {
               setDoc(document);
             }} />
         </div>
-        {doc && createPortal(<div className="canvas-stage"><SiteRenderer {...props} privateAssets={props.assets} /></div>, doc.getElementById("mini-root")!)}
+        {doc && createPortal(<div className="canvas-stage"><SiteRenderer {...props} editing privateAssets={props.assets} /></div>, doc.getElementById("mini-root")!)}
       </div>
     </>}
   </section>;

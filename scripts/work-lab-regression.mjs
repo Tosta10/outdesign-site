@@ -57,6 +57,13 @@ export async function workLabRegression({ page, api, origin }) {
     "true",
     "Artwork is a single plane inside the cassette",
   );
+  console.log(
+    "Archive renderer",
+    await stage.evaluate((el) => ({
+      software: el.dataset.softwareRenderer,
+      quality: el.dataset.effectiveQuality,
+    })),
+  );
   assert.equal(await root.getAttribute("data-mode"), "browse");
   assert.equal(await stage.getAttribute("data-array-overlap"), "false");
   assert.equal(Number(await stage.getAttribute("data-array-cells")), 585);
@@ -143,6 +150,12 @@ export async function workLabRegression({ page, api, origin }) {
   });
   await root.getByRole("button", { name: "重設視角 ↗", exact: true }).click();
   await root.getByRole("button", { name: "返回作品資料", exact: true }).click();
+  await root.getByRole("button", { name: "開啟展示設定", exact: true }).click();
+  await root.locator('[data-lab-setting="theme"]').selectOption("dark");
+  await page.waitForFunction(() => document.querySelector(".lab-stage")?.dataset.cassetteTheme === "dark");
+  assert.equal(await stage.getAttribute("data-shell-color"), "#11161c", "Theme changes the actual cassette material, including the archive array");
+  await root.getByRole("button", { name: "關閉展示設定", exact: true }).click();
+  await root.screenshot({ path: "artifacts/work-glass-dark.png" });
   await root.getByRole("button", { name: "開啟展示設定", exact: true }).click();
   await root.locator('[data-lab-setting="theme"]').selectOption("light");
   await root.locator('[data-lab-setting="quality"]').selectOption("high");
@@ -354,7 +367,10 @@ export async function workLabRegression({ page, api, origin }) {
   await root.evaluate((el) => {
     el.style.transform = "translateY(200vh)";
   });
-  await page.waitForTimeout(250);
+  await page.waitForFunction(() => {
+    const stage = document.querySelector(".lab-stage");
+    return stage?.dataset.visible === "false" && stage.dataset.renderState === "paused";
+  });
   const idleFrames = await stage.getAttribute("data-frames");
   await page.waitForTimeout(200);
   assert.equal(

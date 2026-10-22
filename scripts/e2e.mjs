@@ -1,3 +1,5 @@
+import { workLabAuthorRegression } from "./work-lab-author-regression.mjs";
+import { workLabTrackingRegression } from "./work-lab-tracking-regression.mjs";
 import { chromium } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { spawn } from "node:child_process";
@@ -302,6 +304,8 @@ try {
     password2,
   });
   await workLabRegression({ page, api, origin });
+  await workLabTrackingRegression({ browser, origin });
+  await workLabAuthorRegression({ page, api, password1, password2 });
   assert.deepEqual(errors, []);
   const results = {
     viewports,

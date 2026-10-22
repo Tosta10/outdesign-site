@@ -1,3 +1,5 @@
+import { WorkLabPanel } from "./WorkLabPanel";
+import { LabBlockFields, labBlockSummary } from "./LabBlockFields";
 import {
   memo,
   useDeferredValue,
@@ -343,7 +345,7 @@ export default function ScratchStudio(props: Props) {
             >
               <span>{def.label}</span>
               <span className="block-value">
-                {b.op.includes("variable")
+                {b.op.startsWith("lab-") ? labBlockSummary(b) : b.op.includes("variable")
                   ? `${b.value} ${b.op === "if-variable" ? "≥" : b.op === "add-variable" ? "+" : "="} ${b.amount}`
                   : ["stop", "reset-transform"].includes(b.op) ? ""
                   : ["color", "text-color", "text", "animate", "link"].includes(b.op)
@@ -738,6 +740,7 @@ export default function ScratchStudio(props: Props) {
       <aside className="scratch-library" aria-label="邏輯積木庫">
         <PanelResizer side="logic" />
         <MiniPreview content={deferredContent} page={page} api={props.api} base={props.base} assets={props.assets} onRun={() => setPreview(true)} />
+        {page === "work" && <WorkLabPanel content={content} update={update} compact />}
         <div className="scratch-library-title">
           <p className="eyebrow">BLOCK LIBRARY</p>
           <h2>把邏輯組起來</h2>
@@ -929,6 +932,7 @@ export default function ScratchStudio(props: Props) {
                 <h3>
                   {logicCatalog.find((b) => b.op === editBlock.op)?.label}
                 </h3>
+                {editBlock.op.startsWith("lab-") && <LabBlockFields block={editBlock} change={changeBlock} />}
                 {[
                   "text",
                   "link",
@@ -967,7 +971,7 @@ export default function ScratchStudio(props: Props) {
                     </select>
                   </label>
                 )}
-                {![
+                {!editBlock.op.startsWith("lab-") && ![
                   "text",
                   "color",
                   "text-color",

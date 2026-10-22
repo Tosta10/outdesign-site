@@ -7,6 +7,7 @@ export const logicCategories = [
   { id: "objects", name: "物件圖層", color: "#b69aff" },
   { id: "imports", name: "圖像匯入", color: "#f698c0" },
   { id: "events", name: "事件", color: "#efc356" },
+  { id: "work-lab", name: "作品展示", color: "#67c9c0" },
   { id: "motion", name: "移動與變形", color: "#71a9ff" },
   { id: "looks", name: "外觀與特效", color: "#b394f8" },
   { id: "control", name: "流程控制", color: "#f5ac69" },
@@ -18,6 +19,11 @@ export const logicCatalog: {
   label: string;
   hint: string;
 }[] = [
+  { op: "lab-parameter", category: "work-lab", label: "設定作品動態參數", hint: "相機、波浪、拖曳、貼圖等 24 個參數" },
+  { op: "lab-effect", category: "work-lab", label: "設定作品效果開關", hint: "14 項獨立動態效果" },
+  { op: "lab-option", category: "work-lab", label: "設定作品展示選項", hint: "配色、品質、動態、音訊與玻璃" },
+  { op: "lab-palette", category: "work-lab", label: "設定卡帶材質顏色", hint: "本體、框架、襯底與玻璃" },
+  { op: "lab-action", category: "work-lab", label: "操作作品卡帶", hint: "切換、讀取、360°、拆解與重設" },
   { op: "move", category: "motion", label: "水平移動", hint: "以 px 移動物件" },
   { op: "move-y", category: "motion", label: "垂直移動", hint: "以 px 上下移動物件" },
   { op: "set-x", category: "motion", label: "水平位置設為", hint: "相對原始位置的 px 位移" },
@@ -103,8 +109,7 @@ export function createLogicBlock(op: LogicOp): LogicBlock {
   return {
     id: crypto.randomUUID(),
     op,
-    value:
-      ["color", "text-color"].includes(op)
+    value: op === "lab-parameter" ? "cameraFollow" : op === "lab-effect" ? "selectionWave" : op === "lab-option" ? "theme:light" : op === "lab-palette" ? "shell:#e1dcd1" : op === "lab-action" ? "next" : ["color", "text-color"].includes(op)
         ? "#c7b8ed"
         : op === "animate"
           ? "fade"
@@ -113,8 +118,7 @@ export function createLogicBlock(op: LogicOp): LogicBlock {
             : op === "text"
               ? "新的文字"
               : op === "link" ? "https://example.com" : "",
-    amount:
-      op === "scale" || op === "opacity"
+    amount: op === "lab-parameter" ? 24 : ["scale", "opacity"].includes(op)
         ? 100
         : op === "repeat"
           ? 3

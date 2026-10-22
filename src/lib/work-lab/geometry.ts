@@ -1,3 +1,4 @@
+import type { WorkLabConfig } from "../../../supabase/functions/_shared/work-lab-config.ts";
 import * as T from "three";
 import type { LabItem } from "./state";
 export function makeObject(
@@ -8,25 +9,25 @@ export function makeObject(
   const object = new T.Group(),
     pieces = Array.from({ length: 6 }, () => new T.Group());
   const metal = new T.MeshStandardMaterial({
-    color: 0xc5d3d6,
+    color: 0xe1dcd1,
     metalness: 0.7,
     roughness: 0.23,
   });
   const substrate = new T.MeshStandardMaterial({
-    color: 0x30444d,
+    color: 0xc4beb2,
     metalness: 0.28,
     roughness: 0.36,
   });
   const accent = new T.MeshStandardMaterial({
-    color: 0xaedfcf,
-    emissive: 0x28584f,
+    color: 0x8b8d88,
+    emissive: 0x51544d,
     emissiveIntensity: 0.2,
     metalness: 0.35,
     roughness: 0.22,
   });
   const reveal = { value: 1 };
   const glass = new T.MeshPhysicalMaterial({
-    color: 0xf0ffff,
+    color: 0xfffdf5,
     transmission: low ? 0 : 0.97,
     transparent: low,
     opacity: low ? 0.12 : 1,
@@ -75,11 +76,11 @@ export function makeObject(
   add(1, new T.BoxGeometry(2.24, 2.88, 0.055), glass, 0, 0, 0.2);
   const pictureCanvas = document.createElement("canvas");
   pictureCanvas.width = 1536;
-  pictureCanvas.height = 1280;
+  pictureCanvas.height = 1313;
   const ctx = pictureCanvas.getContext("2d")!;
   const placeholder = () => {
     ctx.fillStyle = "#dfe6e0";
-    ctx.fillRect(0, 0, 1536, 1280);
+    ctx.fillRect(0, 0, 1536, 1313);
     ctx.strokeStyle = "#76948d";
     ctx.lineWidth = 1;
     for (let i = 0; i < 14; i++) {
@@ -99,6 +100,9 @@ export function makeObject(
   texture.colorSpace = T.SRGBColorSpace;
   const printMaterial = new T.MeshBasicMaterial({
     map: texture,
+    transparent: true,
+    alphaTest: .01,
+    toneMapped: false,
     side: T.DoubleSide,
   });
   // A coplanar print on the inner cassette face avoids refracting the cover art twice.
@@ -108,7 +112,7 @@ export function makeObject(
     shader.vertexShader = "varying float odPrintY;\n" + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace(
       "#include <begin_vertex>",
-      "#include <begin_vertex>\nodPrintY = position.y / 2.525 + 0.5;",
+      "#include <begin_vertex>\nodPrintY = position.y / 2.94 + 0.5;",
     );
     shader.fragmentShader =
       "uniform float odPrintReveal; varying float odPrintY;\n" +
@@ -130,28 +134,28 @@ diffuseColor *= mix(odSoft, odSharp, odVisible);
 
   const picture = add(
     2,
-    new T.PlaneGeometry(2.02, 2.525),
+    new T.PlaneGeometry(3.44 / 1.5, 2.94),
     printMaterial,
     0,
     -0.04,
     0.234,
   );
   picture.name = "outdesign-flat-artwork";
+  picture.scale.set(.64, .64, 1);
   if (item.image) {
     const image = new Image();
     image.crossOrigin = "anonymous";
     image.onload = () => {
       if (object.userData.disposed) return;
       try {
-        ctx.fillStyle = "#e3e9e4";
-        ctx.fillRect(0, 0, 1536, 1280);
+        ctx.clearRect(0, 0, 1536, 1313);
         const scale = Math.min(
             1536 / image.naturalWidth,
-            1280 / image.naturalHeight,
+            1313 / image.naturalHeight,
           ),
           w = image.naturalWidth * scale,
           h = image.naturalHeight * scale;
-        ctx.drawImage(image, (1536 - w) / 2, (1280 - h) / 2, w, h);
+        ctx.drawImage(image, (1536 - w) / 2, (1313 - h) / 2, w, h);
         ctx.getImageData(0, 0, 1, 1);
         texture.needsUpdate = true;
         textureReady(true);
@@ -166,10 +170,10 @@ diffuseColor *= mix(odSoft, odSharp, odVisible);
     };
     image.src = item.image;
   }
-  add(
+  const liner = add(
     3,
     new T.BoxGeometry(2.13, 2.73, 0.035),
-    new T.MeshStandardMaterial({ color: 0xe2e9e6, roughness: 0.6 }),
+    new T.MeshStandardMaterial({ color: 0xe1dcd1, roughness: 0.6 }),
     0,
     0,
     0.1,
@@ -191,9 +195,8 @@ diffuseColor *= mix(odSoft, odSharp, odVisible);
   labelCanvas.width = 768;
   labelCanvas.height = 96;
   const labelCtx = labelCanvas.getContext("2d")!;
-  labelCtx.fillStyle = "#213936";
-  labelCtx.fillRect(0, 0, 768, 96);
-  labelCtx.fillStyle = "#e0efeb";
+  labelCtx.clearRect(0, 0, 768, 96);
+  labelCtx.fillStyle = "#41453f";
   labelCtx.font = "28px monospace";
   labelCtx.fillText(`OUTDESIGN / ${item.code}`, 24, 58);
   const label = new T.CanvasTexture(labelCanvas);
@@ -201,7 +204,7 @@ diffuseColor *= mix(odSoft, odSharp, odVisible);
   add(
     5,
     new T.PlaneGeometry(1.2, 0.15),
-    new T.MeshBasicMaterial({ map: label }),
+    new T.MeshBasicMaterial({ map: label, transparent: true, alphaTest: .01, toneMapped: false }),
     -0.39,
     1.31,
     0.25,
@@ -210,7 +213,7 @@ diffuseColor *= mix(odSoft, odSharp, odVisible);
     piece.userData.part = i;
     object.add(piece);
   });
-  return { object, pieces, reveal, glass, accent, picture };
+  return { object, pieces, reveal, glass, accent, picture, metal, substrate, liner: liner.material as T.MeshStandardMaterial, labelCanvas, labelCtx, label, code: item.code };
 }
 export function disposeObject(root: T.Object3D) {
   root.userData.disposed = true;
@@ -231,4 +234,35 @@ export function disposeObject(root: T.Object3D) {
   materials.forEach((m) => m.dispose());
   geometries.forEach((g) => g.dispose());
   root.clear();
+}
+
+export function configureObject(model: ReturnType<typeof makeObject>, config: WorkLabConfig) {
+  model.picture.scale.set(config.parameters.coverScale, config.parameters.coverScale, 1);
+  model.metal.color.set(config.palette.frame);
+  model.substrate.color.set(config.palette.back);
+  model.liner.color.set(config.palette.liner);
+  model.glass.color.set(config.palette.glass);
+  model.accent.color.set(config.palette.accent);
+  const darkKeys = ["darkFrame", "darkBack", "darkLiner", "darkGlass", "darkAccent"] as const;
+  [model.metal, model.substrate, model.liner, model.glass, model.accent].forEach((material, i) => {
+    material.userData.labBaseColor = material.color.clone();
+    material.userData.labDarkColor = new T.Color(config.palette[darkKeys[i]]);
+  });
+}
+
+export function applyObjectTheme(model: ReturnType<typeof makeObject>, amount: number) {
+  [model.metal, model.substrate, model.liner, model.glass, model.accent].forEach((material) => {
+    const base = material.userData.labBaseColor as T.Color | undefined;
+    const dark = material.userData.labDarkColor as T.Color | undefined;
+    if (base && dark) material.color.lerpColors(base, dark, amount);
+  });
+  const dark = amount > .5;
+  if (model.object.userData.labelDark !== dark) {
+    model.object.userData.labelDark = dark;
+    model.labelCtx.clearRect(0, 0, 768, 96);
+    model.labelCtx.fillStyle = dark ? "#d0d6db" : "#41453f";
+    model.labelCtx.font = "28px monospace";
+    model.labelCtx.fillText(`OUTDESIGN / ${model.code}`, 24, 58);
+    model.label.needsUpdate = true;
+  }
 }

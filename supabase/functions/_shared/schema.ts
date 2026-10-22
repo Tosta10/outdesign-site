@@ -206,6 +206,7 @@ export const assemblySchema = z
 export type Assembly = z.infer<typeof assemblySchema>;
 // A bounded, declarative language. No arbitrary JavaScript or unbounded loops.
 export const logicOperation = z.enum([
+  "lab-parameter", "lab-effect", "lab-option", "lab-palette", "lab-action",
   "move",
   "move-y",
   "set-x",
@@ -334,6 +335,73 @@ export const workspaceSchema = z
   })
   .strict()
   .superRefine((workspace, ctx) => validateTree(workspace.nodes, ctx));
+export const workLabSchema = z.object({
+  parameters: z.object({
+    coverScale: z.number().min(.35).max(.82),
+    selectionSpeed: z.number().min(2).max(16),
+    cameraFollow: z.number().min(5).max(40),
+    cameraTransition: z.number().min(2).max(20),
+    extractionSpeed: z.number().min(2).max(16),
+    returnSpeed: z.number().min(2).max(16),
+    shoulderSpeed: z.number().min(2).max(16),
+    columnSpeed: z.number().min(2).max(16),
+    waveAmplitude: z.number().min(0).max(2),
+    waveSpeed: z.number().min(.25).max(3),
+    idleAmplitude: z.number().min(0).max(2),
+    idleSpeed: z.number().min(.25).max(3),
+    parallax: z.number().min(0).max(.6),
+    inertia: z.number().min(.5).max(10),
+    snapSpeed: z.number().min(3).max(30),
+    revealDuration: z.number().min(.2).max(4),
+    modelSpeed: z.number().min(2).max(20),
+    orbitFollow: z.number().min(5).max(40),
+    zoomFollow: z.number().min(5).max(40),
+    panFollow: z.number().min(5).max(40),
+    bootDuration: z.number().min(.3).max(5),
+    transitionDuration: z.number().min(.1).max(1.5),
+    explosionDistance: z.number().min(.25).max(2),
+    volume: z.number().min(0).max(.3),
+  }).strict(),
+  effects: z.object({
+    boot: z.boolean(),
+    selectionWave: z.boolean(),
+    idleWave: z.boolean(),
+    pointerParallax: z.boolean(),
+    dragMomentum: z.boolean(),
+    selectionTransition: z.boolean(),
+    detailTransition: z.boolean(),
+    modelDecryption: z.boolean(),
+    documentReveal: z.boolean(),
+    rollingText: z.boolean(),
+    rollingNumbers: z.boolean(),
+    surfaceTransitions: z.boolean(),
+    viewerNavigation: z.boolean(),
+    viewerModelTransition: z.boolean(),
+  }).strict(),
+  options: z.object({
+    theme: z.enum(["light", "dark"]),
+    quality: z.enum(["low", "medium", "high"]),
+    motionPreset: z.enum(["system", "full", "reduced"]),
+    sound: z.enum(["off", "on"]),
+    ambient: z.enum(["off", "on"]),
+    glass: z.enum(["clear", "frosted"]),
+  }).strict(),
+  palette: z.object({
+    shell: z.string().regex(/^#[0-9a-f]{6}$/i),
+    frame: z.string().regex(/^#[0-9a-f]{6}$/i),
+    back: z.string().regex(/^#[0-9a-f]{6}$/i),
+    liner: z.string().regex(/^#[0-9a-f]{6}$/i),
+    accent: z.string().regex(/^#[0-9a-f]{6}$/i),
+    glass: z.string().regex(/^#[0-9a-f]{6}$/i),
+    darkShell: z.string().regex(/^#[0-9a-f]{6}$/i),
+    darkFrame: z.string().regex(/^#[0-9a-f]{6}$/i),
+    darkBack: z.string().regex(/^#[0-9a-f]{6}$/i),
+    darkLiner: z.string().regex(/^#[0-9a-f]{6}$/i),
+    darkAccent: z.string().regex(/^#[0-9a-f]{6}$/i),
+    darkGlass: z.string().regex(/^#[0-9a-f]{6}$/i),
+  }).strict(),
+}).strict();
+
 export const contentSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -383,6 +451,7 @@ export const contentSchema = z
       .object({ title: text(100), artist: text(100), url: mediaUrl })
       .strict(),
     attachments: z.array(attachmentSchema).max(20),
+    workLab: workLabSchema.optional(),
     interactions: interactionSchema.optional(),
     design: designSchema.optional(),
     presentation: z
@@ -417,7 +486,7 @@ export const contentSchema = z
           .optional(),
         copy: z
           .record(z.string().regex(/^[a-z][a-zA-Z0-9.-]{0,79}$/), text(500))
-          .refine((v) => Object.keys(v).length <= 120)
+          .refine((v) => Object.keys(v).length <= 240)
           .optional(),
       })
       .strict()

@@ -1,3 +1,4 @@
+import type { WorkLabConfig } from "../../../supabase/functions/_shared/work-lab-config.ts";
 import * as T from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { ViewerCameraMotion } from "./viewer-camera";
@@ -7,7 +8,7 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { SSAOPass } from "three/addons/postprocessing/SSAOPass.js";
 import { BokehPass } from "three/addons/postprocessing/BokehPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
-import { makeObject, disposeObject } from "./geometry";
+import { makeObject, disposeObject, configureObject, applyObjectTheme } from "./geometry";
 import {
   relax,
   motionAllowed,
@@ -28,6 +29,9 @@ import {
   smooth,
 } from "./motion";
 export type SceneState = {
+  navigationUntil: number;
+  config: WorkLabConfig;
+  authoring?: boolean;
   items: LabItem[];
   track: { lane: number; row: number } | null;
   pointer: { x: number; y: number };
@@ -57,6 +61,23 @@ export function createLabScene(
     alpha: true,
     powerPreference: "low-power",
   });
+  const gl = renderer.getContext(),
+    debug = gl.getExtension("WEBGL_debug_renderer_info");
+  const rendererName = debug
+    ? String(gl.getParameter(debug.UNMASKED_RENDERER_WEBGL))
+    : "";
+  const software =
+    /SwiftShader|llvmpipe|softpipe|software|Microsoft Basic Render/i.test(
+      rendererName,
+    );
+  host.dataset.softwareRenderer = String(software);
+  const qualityNote = host
+    .closest<HTMLElement>("[data-work-lab]")
+    ?.querySelector<HTMLElement>("[data-lab-quality-status]");
+  if (qualityNote)
+    qualityNote.textContent = software
+      ? "此裝置採用軟體繪圖，已自動使用省電畫質；所有互動仍可使用。"
+      : "";
   renderer.outputColorSpace = T.SRGBColorSpace;
   renderer.toneMapping = T.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.16;
@@ -119,11 +140,13 @@ export function createLabScene(
     dummy = new T.Object3D();
   const cellMatrix = new T.Matrix4(),
     componentMatrix = new T.Matrix4();
-  const shell = new T.MeshStandardMaterial({
-    color: 0xe1dcd1,
-    metalness: 0.04,
-    roughness: 0.39,
-  });
+  const shell = software
+    ? new T.MeshLambertMaterial({ color: 0xe1dcd1 })
+    : new T.MeshStandardMaterial({
+        color: 0xe1dcd1,
+        metalness: 0.04,
+        roughness: 0.39,
+      });
   shell.onBeforeCompile = (shader) => {
     shader.vertexShader = "varying float panelHeight;\n" + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace(
@@ -166,13 +189,14 @@ export function createLabScene(
     Math.ceil(state.items.reduce((n, item) => Math.max(n, item.id + 1), 1) / 4),
   );
   atlasCanvas.width = 2048;
-  atlasCanvas.height = atlasRows * 512;
+  const atlasHeight = 438;
+  atlasCanvas.height = atlasRows * atlasHeight;
   const ctx = atlasCanvas.getContext("2d")!,
     atlas = new T.CanvasTexture(atlasCanvas);
   atlas.colorSpace = T.SRGBColorSpace;
   atlas.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
   const indices = new Float32Array(count),
-    artGeometry = new T.PlaneGeometry(3.18, 2.62);
+    artGeometry = new T.PlaneGeometry(layout.width, layout.height);
   artGeometry.setAttribute(
     "odImage",
     new T.InstancedBufferAttribute(indices, 1),
@@ -180,7 +204,10 @@ export function createLabScene(
   const artMaterial = new T.MeshBasicMaterial({
     map: atlas,
     side: T.DoubleSide,
-    color: 0xf1eee6,
+    color: 0xffffff,
+    transparent: true,
+    alphaTest: .01,
+    toneMapped: false,
   });
   artMaterial.onBeforeCompile = (shader) => {
     shader.vertexShader =
@@ -209,7 +236,8 @@ export function createLabScene(
     visible = true,
     lost = false,
     last = performance.now(),
-    lastDraw = 0;
+    lastDraw = 0,
+    rendering = false;
   let lane = state.lane,
     row = state.row,
     detail = 0,
@@ -258,6 +286,7 @@ export function createLabScene(
   let quality = "",
     theme = "",
     composer: EffectComposer | null = null;
+  const cameraOffset = new T.Vector3(-18, 12.24, 18.72);
   const target = new T.Vector3(),
     aim = new T.Vector3(),
     ray = new T.Raycaster(),
@@ -268,18 +297,13 @@ export function createLabScene(
   function atlasCell(item: LabItem, image?: HTMLImageElement) {
     if (!alive) return;
     const x = (item.id % 4) * 512,
-      y = Math.floor(item.id / 4) * 512;
-    ctx.fillStyle = "#e5e1d7";
-    ctx.fillRect(x, y, 512, 512);
+      y = Math.floor(item.id / 4) * atlasHeight;
+    ctx.clearRect(x, y, 512, atlasHeight);
     if (image) {
-      const fit = Math.min(488 / image.naturalWidth, 425 / image.naturalHeight);
-      const w = image.naturalWidth * fit,
-        h = image.naturalHeight * fit;
-      ctx.drawImage(image, x + (512 - w) / 2, y + 65 + (425 - h) / 2, w, h);
+      const fit = Math.min(512 / image.naturalWidth, atlasHeight / image.naturalHeight);
+      const w = image.naturalWidth * fit, h = image.naturalHeight * fit;
+      ctx.drawImage(image, x + (512 - w) / 2, y + (atlasHeight - h) / 2, w, h);
     }
-    ctx.fillStyle = "#3e4743";
-    ctx.font = "18px monospace";
-    ctx.fillText(`OUTDESIGN / ${item.code}`, x + 24, y + 34);
     atlas.needsUpdate = true;
     invalidate();
   }
@@ -291,19 +315,44 @@ export function createLabScene(
     composer?.setSize(Math.max(1, rect.width), Math.max(1, rect.height));
     invalidate();
   }
+  let configured: WorkLabConfig | undefined;
   function configure() {
-    if (quality !== state.preferences.quality) {
-      quality = state.preferences.quality;
+    if (configured !== state.config) {
+      configured = state.config;
+      shellPaper.set(state.config.palette.shell);
+      shellNight.set(state.config.palette.darkShell);
+      configureObject(model, state.config);
+      outgoing.forEach(old => configureObject(old.model, state.config));
+      host.dataset.coverScale = String(state.config.parameters.coverScale);
+      host.dataset.cassetteColor = state.config.palette.shell;
+      host.dataset.cameraFollow = String(state.config.parameters.cameraFollow);
+    }
+    const desiredQuality = software ? "low" : state.preferences.quality;
+    if (quality !== desiredQuality) {
+      quality = desiredQuality;
+      host.dataset.effectiveQuality = quality;
       composer?.passes.forEach((pass) => pass.dispose());
       composer?.dispose();
       composer = null;
       renderer.setPixelRatio(
         Math.min(
           devicePixelRatio,
-          quality === "high" ? 1.75 : quality === "low" ? 1 : 1.35,
+          software
+            ? 0.75
+            : quality === "high"
+              ? 1.75
+              : quality === "low"
+                ? 1
+                : 1.35,
         ),
       );
       renderer.shadowMap.enabled = quality !== "low";
+      const shadowSize = quality === "high" ? 2048 : 1024;
+      if (light.shadow.mapSize.x !== shadowSize) {
+        light.shadow.map?.dispose();
+        light.shadow.map = null;
+        light.shadow.mapSize.set(shadowSize, shadowSize);
+      }
       renderer.transmissionResolutionScale = quality === "high" ? 1 : 0.5;
       model.glass.transmission = quality === "low" ? 0 : 0.97;
       model.glass.transparent = quality === "low";
@@ -333,35 +382,36 @@ export function createLabScene(
       const color = theme === "light" ? 0xe8e5df : 0x152027;
       scene.background = new T.Color(color);
       scene.fog = new T.Fog(color, 38, 70);
-      shell.color.set(theme === "light" ? 0xe1dcd1 : 0x7a8f94);
+      shell.color.copy(theme === "light" ? shellPaper : shellNight);
     }
   }
   const observer = new ResizeObserver(resize);
   observer.observe(host);
   const intersection = new IntersectionObserver(([entry]) => {
     visible = entry.isIntersecting;
-    invalidate();
+    host.dataset.visible = String(visible);
+    if (visible) invalidate();
+    else stopRendering();
   });
   intersection.observe(host);
   function draw(now: number) {
     if (!alive || lost || document.hidden || !visible) {
-      renderer.setAnimationLoop(null);
+      stopRendering();
       return;
     }
     const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
+    if (quality === "low" && now - lastDraw < 32) return;
     last = now;
-    if (state.preferences.quality === "low" && now - lastDraw < 32) return;
     lastDraw = now;
     configure();
     const motion =
       state.preferences.motion &&
       Object.values(state.preferences.effects).some(Boolean);
-    themeAmount = relax(
-      themeAmount,
-      state.preferences.theme === "dark" ? 1 : 0,
-      dt,
-      motionAllowed(state.preferences, "surfaceTransitions") ? 5 : 1000,
-    );
+    const targetTheme = state.preferences.theme === "dark" ? 1 : 0;
+    themeAmount = motionAllowed(state.preferences, "surfaceTransitions")
+      ? relax(themeAmount, targetTheme, dt, 5)
+      : targetTheme;
+    if (Math.abs(themeAmount - targetTheme) < .00001) themeAmount = targetTheme;
     (scene.background as T.Color).lerpColors(
       paperColor,
       nightColor,
@@ -370,7 +420,12 @@ export function createLabScene(
     if (scene.fog instanceof T.Fog)
       scene.fog.color.copy(scene.background as T.Color);
     shell.color.lerpColors(shellPaper, shellNight, themeAmount);
+    applyObjectTheme(model, themeAmount);
+    outgoing.forEach(old => applyObjectTheme(old.model, themeAmount));
+    host.dataset.cassetteTheme = themeAmount === 1 ? "dark" : themeAmount === 0 ? "light" : "transition";
+    host.dataset.shellColor = `#${shell.color.getHexString()}`;
     renderer.toneMappingExposure = 1.16 - 0.13 * themeAmount;
+    const p = state.config.parameters;
     const trackMotion = motionAllowed(state.preferences, "selectionTransition"),
       detailMotion = motionAllowed(state.preferences, "detailTransition"),
       viewerNavigation = motionAllowed(state.preferences, "viewerNavigation");
@@ -380,38 +435,43 @@ export function createLabScene(
       laneSpring.velocity = rowSpring.velocity = 0;
       lastInteraction = now;
     } else {
-      damp(laneSpring, state.lane, trackMotion ? 3.7 : 1000, dt);
-      damp(rowSpring, state.row, trackMotion ? 3.7 : 1000, dt);
+      // Repeated keys / rapid wheel input get a shorter catch-up without snapping
+      // the array. Pointer drag itself already owns the exact projected coordinate.
+      const chase = now < state.navigationUntil ? Math.max(p.selectionSpeed, p.cameraFollow * 3) : p.selectionSpeed;
+      damp(laneSpring, state.lane, trackMotion ? chase : 1000, dt);
+      damp(rowSpring, state.row, trackMotion ? chase : 1000, dt);
     }
     lane = laneSpring.value;
     row = rowSpring.value;
-    damp(shoulder, state.row, trackMotion ? 5 : 1000, dt);
-    damp(laneFocus, state.lane, trackMotion ? 4 : 1000, dt);
+    host.dataset.frameDelta = String(dt);
+    host.dataset.trackingError = String(Math.hypot(lane - (state.track?.lane ?? state.lane), row - (state.track?.row ?? state.row)));
+    damp(shoulder, state.row, trackMotion ? p.shoulderSpeed : 1000, dt);
+    damp(laneFocus, state.lane, trackMotion ? p.columnSpeed : 1000, dt);
     explode = relax(
       explode,
       Number(state.exploded),
       dt,
-      motionAllowed(state.preferences, "viewerModelTransition") ? 6 : 1000,
+      motionAllowed(state.preferences, "viewerModelTransition") ? p.modelSpeed : 1000,
     );
     turnX = relax(
       turnX,
       state.mode === "browse" ? 0 : state.rotation.x,
       dt,
-      viewerNavigation ? 7 : 1000,
+      viewerNavigation ? p.orbitFollow : 1000,
     );
     turnY = relax(
       turnY,
       state.mode === "browse" ? 0 : state.rotation.y,
       dt,
-      viewerNavigation ? 7 : 1000,
+      viewerNavigation ? p.orbitFollow : 1000,
     );
-    zoom = relax(zoom, state.zoom, dt, viewerNavigation ? 5 : 1000);
+    zoom = relax(zoom, state.zoom, dt, viewerNavigation ? p.zoomFollow : 1000);
     const aligning =
       state.mode === "browse" && Math.hypot(turnX, turnY) > 0.005;
     damp(
       lift,
       state.mode !== "browse" ? 4.05 : aligning ? lift.value : 0.4,
-      detailMotion ? 4.2 : 1000,
+      detailMotion ? p.extractionSpeed : 1000,
       dt,
     );
     const cameraTarget =
@@ -420,7 +480,7 @@ export function createLabScene(
         : aligning
           ? detail
           : smooth((lift.value - 0.4) / 3.65);
-    detail = relax(detail, cameraTarget, dt, detailMotion ? 2.8 : 1000);
+    detail = relax(detail, cameraTarget, dt, detailMotion ? p.cameraTransition : 1000);
     const selected = itemAtCell(state.items, state.lane, state.row);
     const selectionKey = `${selected.key}:${state.lane}:${state.row}`;
     if (active !== selectionKey) {
@@ -452,6 +512,8 @@ export function createLabScene(
           invalidate();
         }
       });
+      configureObject(model, state.config);
+      applyObjectTheme(model, themeAmount);
       scene.add(model.object);
       reveal = 0;
     }
@@ -474,14 +536,14 @@ export function createLabScene(
         : [])
         ripple += baselineSelectionWave(
           Math.hypot(r - pulse.row, (l - pulse.lane) * 2.2),
-          (now - pulse.time) / 1000,
+          (now - pulse.time) / 1000 * p.waveSpeed,
         );
       return (
         shoulderHeight +
         (motionAllowed(state.preferences, "idleWave")
-          ? idleWave(r, l, now / 1000) * idleGain
+          ? idleWave(r, l, now / 1000 * p.idleSpeed) * idleGain * p.idleAmplitude
           : 0) +
-        Math.max(-0.6, Math.min(0.6, ripple)) * (1 - detail)
+        Math.max(-0.6, Math.min(0.6, ripple)) * (1 - detail) * p.waveAmplitude
       );
     };
     const hoverKey = hoverCell ? `${hoverCell.lane}:${hoverCell.row}` : "";
@@ -502,7 +564,7 @@ export function createLabScene(
       state.mode === "browse"
         ? 0
         : detail > 0.78 && lift.value > 3.3
-          ? Math.min(1, reveal + dt / (motion ? 1.65 : 0.01))
+          ? Math.min(1, reveal + dt / (motion ? p.revealDuration : 0.01))
           : reveal;
     model.reveal.value =
       !motionAllowed(state.preferences, "modelDecryption") && !state.frosted
@@ -538,16 +600,16 @@ export function createLabScene(
         old.rotation.x,
         0,
         dt,
-        viewerNavigation ? 7 : 1000,
+        viewerNavigation ? p.orbitFollow : 1000,
       );
       old.rotation.y = relax(
         old.rotation.y,
         0,
         dt,
-        viewerNavigation ? 7 : 1000,
+        viewerNavigation ? p.orbitFollow : 1000,
       );
       if (Math.hypot(old.rotation.x, old.rotation.y) < 0.005)
-        damp(old.lift, 0, motion ? 4.5 : 1000, dt);
+        damp(old.lift, 0, motion ? p.returnSpeed : 1000, dt);
       old.model.object.position.set(
         (old.lane - lane) * layout.columnGap,
         field(old.row, old.lane) + old.lift.value,
@@ -581,7 +643,7 @@ export function createLabScene(
     model.object.scale.set(1.5, 1, 1);
     const depths = [-0.65, 1.65, 0.55, 0.1, -1.15, 2.2];
     model.pieces.forEach((part, i) => {
-      part.position.z = state.mode === "inspect" ? depths[i] * explode : 0;
+      part.position.z = state.mode === "inspect" ? depths[i] * explode * p.explosionDistance : 0;
       part.position.x =
         state.mode === "inspect" ? (i === 5 ? 0.3 : 0) * explode : 0;
       part.scale.setScalar(state.highlight === i ? 1.045 : 1);
@@ -620,16 +682,17 @@ export function createLabScene(
           y: number,
           z: number,
           rotation = 0,
+          scale = 1,
         ) => {
           dummy.position.set(x, y, z);
           dummy.rotation.set(rotation, 0, 0);
-          dummy.scale.setScalar(1);
+          dummy.scale.set(scale, scale, 1);
           dummy.updateMatrix();
           componentMatrix.multiplyMatrices(cellMatrix, dummy.matrix);
           mesh.setMatrixAt(slot, componentMatrix);
         };
         component(edges, index, 0, layout.height / 2, 0);
-        component(artwork, index, 0, 0, layout.depth / 2 + 0.006);
+        component(artwork, index, 0, -.04, layout.depth / 2 + 0.006, 0, p.coverScale);
         const columnItems = columns[wrap(l, columns.length)].items;
         indices[index] = columnItems[wrap(r, columnItems.length)].id;
         for (let pin = 0; pin < 2; pin++)
@@ -663,13 +726,12 @@ export function createLabScene(
           blend,
     );
     if (motionAllowed(state.preferences, "pointerParallax")) {
-      target.x += state.pointer.x * 0.12 * (1 - blend);
-      target.y -= state.pointer.y * 0.12 * (1 - blend);
+      target.x += state.pointer.x * p.parallax * (1 - blend);
+      target.y -= state.pointer.y * p.parallax * (1 - blend);
     }
-    camera.position.lerp(
-      target,
-      motion && detail > 0.001 ? 1 - Math.exp(-dt * 5) : 1,
-    );
+    const follow = motion ? 1 - Math.exp(-dt * p.cameraFollow) : 1;
+    cameraOffset.lerp(target.sub(aim), follow);
+    camera.position.copy(aim).add(cameraOffset);
     camera.lookAt(aim);
     camera.fov = 25 * (1 - blend) + 36 * blend;
     const width = Math.max(1, host.clientWidth),
@@ -685,7 +747,7 @@ export function createLabScene(
     if (state.mode === "inspect") {
       if (!inspecting) {
         inspecting = true;
-        controls.enabled = true;
+        controls.enabled = !state.authoring;
         controls.target.set(0, 0, 0);
         controlCamera.position.set(3.5, 2, Math.max(8.5, 5.7 / camera.aspect));
         controlCamera.fov = 36;
@@ -700,6 +762,7 @@ export function createLabScene(
         controls.target,
         dt,
         !viewerNavigation,
+        p,
       );
     } else if (inspecting) {
       inspecting = false;
@@ -736,6 +799,7 @@ export function createLabScene(
     host.dataset.frames = String(Number(host.dataset.frames || 0) + 1);
     if (
       !motion &&
+      themeAmount === targetTheme &&
       Math.abs(detail - Number(state.mode !== "browse")) < 0.0001 &&
       outgoing.length === 0 &&
       Math.abs(explode - Number(state.exploded)) < 0.0001 &&
@@ -748,11 +812,21 @@ export function createLabScene(
       Math.abs(zoom - state.zoom) < 0.0001 &&
       reveal === (state.mode === "browse" ? 0 : 1)
     )
-      renderer.setAnimationLoop(null);
+      stopRendering();
+  }
+  function stopRendering() {
+    rendering = false;
+    host.dataset.renderState = "paused";
+    renderer.setAnimationLoop(null);
   }
   function invalidate() {
-    if (alive && !lost && visible && !document.hidden) {
+    if (alive && !lost && visible && !document.hidden && !rendering) {
+      // Input may arrive several times per frame. Only restart the clock when
+      // resuming: resetting it on every pointer event starves spring/camera time.
       last = performance.now();
+      lastDraw = 0;
+      rendering = true;
+      host.dataset.renderState = "active";
       renderer.setAnimationLoop(draw);
     }
   }
@@ -813,7 +887,10 @@ export function createLabScene(
       ? itemAtCell(state.items, hoverCell.lane, hoverCell.row)
       : null;
   }
-  document.addEventListener("visibilitychange", invalidate, {
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stopRendering();
+    else invalidate();
+  }, {
     signal: abort.signal,
   });
   canvas.addEventListener(
@@ -821,7 +898,7 @@ export function createLabScene(
     (event) => {
       event.preventDefault();
       lost = true;
-      renderer.setAnimationLoop(null);
+      stopRendering();
       host.dataset.ready = "lost";
     },
     { signal: abort.signal },
@@ -909,7 +986,7 @@ export function createLabScene(
       alive = false;
       abort.abort();
       controls.dispose();
-      renderer.setAnimationLoop(null);
+      stopRendering();
       observer.disconnect();
       intersection.disconnect();
       images.forEach((image) => {

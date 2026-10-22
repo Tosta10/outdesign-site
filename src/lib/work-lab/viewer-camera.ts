@@ -45,6 +45,7 @@ export class ViewerCameraMotion {
     target: THREE.Vector3,
     dt: number,
     reduced = false,
+    rates = { panFollow: 24, orbitFollow: 20, zoomFollow: 24 },
   ) {
     if (reduced) {
       this.snap(goal, target);
@@ -59,9 +60,9 @@ export class ViewerCameraMotion {
       this.interpolate(this.resetFrom, this.desired, p, p);
       if (t === 1) this.resetting = false;
     } else {
-      const pan = 1 - Math.exp(-13 * Math.max(0, dt));
-      const orbit = 1 - Math.exp(-9 * Math.max(0, dt));
-      const zoom = 1 - Math.exp(-15 * Math.max(0, dt));
+      const pan = 1 - Math.exp(-rates.panFollow * Math.max(0, dt));
+      const orbit = 1 - Math.exp(-rates.orbitFollow * Math.max(0, dt));
+      const zoom = 1 - Math.exp(-rates.zoomFollow * Math.max(0, dt));
       this.focus.lerp(target, pan);
       this.interpolate(this.pose, this.desired, orbit, zoom);
       if (this.focus.distanceToSquared(target) < 1e-10) this.focus.copy(target);

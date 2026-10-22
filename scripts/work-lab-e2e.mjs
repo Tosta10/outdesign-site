@@ -1,3 +1,5 @@
+import { workLabAuthorRegression } from "./work-lab-author-regression.mjs";
+import { workLabTrackingRegression } from "./work-lab-tracking-regression.mjs";
 import { chromium } from "@playwright/test";
 import { spawn } from "node:child_process";
 import { mkdtemp, rm, mkdir, readFile } from "node:fs/promises";
@@ -60,6 +62,10 @@ try {
   await mkdir("artifacts", { recursive: true });
   browser = await chromium.launch({
     headless: true,
+    args:
+      process.env.OUTDESIGN_TEST_SOFTWARE_GPU === "true"
+        ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+        : [],
     channel: process.platform === "win32" ? "msedge" : undefined,
   });
   const context = await browser.newContext({
@@ -73,7 +79,11 @@ try {
   });
   page.on("pageerror", (e) => console.error("Runtime:", e));
   try {
-    await workLabRegression({ page, api, origin });
+    if (process.env.OUTDESIGN_TEST_AUTHOR_ONLY !== "true") {
+      await workLabRegression({ page, api, origin });
+      await workLabTrackingRegression({ browser, origin });
+    } else await page.goto(`${origin}/work/`, { waitUntil: "networkidle" });
+    await workLabAuthorRegression({ page, api });
     console.log("Glass cassette regression passed");
   } catch (e) {
     await page.screenshot({

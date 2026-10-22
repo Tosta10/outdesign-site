@@ -100,9 +100,12 @@ export class ArchiveMomentum {
   velocity: number;
   phase: "coasting" | "snapping" | "idle";
   target: number;
-  private readonly friction = 2.4;
+  private readonly friction: number;
+  private readonly snapRate: number;
 
-  constructor(value: number, velocity: number) {
+  constructor(value: number, velocity: number, friction = 2.4, snapRate = 10) {
+    this.friction = friction;
+    this.snapRate = snapRate;
     this.value = value;
     this.velocity = velocity;
     this.phase = Math.abs(velocity) >= 0.75 ? "coasting" : "snapping";
@@ -119,7 +122,7 @@ export class ArchiveMomentum {
         this.phase = "snapping";
       }
     } else if (this.phase === "snapping") {
-      const rate = 10;
+      const rate = this.snapRate;
       const delta = this.value - this.target;
       const impulse = this.velocity + rate * delta;
       const decay = Math.exp(-rate * dt);
@@ -141,9 +144,9 @@ export class ArchiveMomentum {
 export class ArchivePlaneMomentum {
   readonly lane: ArchiveMomentum;
   readonly row: ArchiveMomentum;
-  constructor(value: DragPosition, velocity: DragPosition) {
-    this.lane = new ArchiveMomentum(value.lane, velocity.lane);
-    this.row = new ArchiveMomentum(value.row, velocity.row);
+  constructor(value: DragPosition, velocity: DragPosition, friction = 2.4, snapRate = 10) {
+    this.lane = new ArchiveMomentum(value.lane, velocity.lane, friction, snapRate);
+    this.row = new ArchiveMomentum(value.row, velocity.row, friction, snapRate);
   }
   get phase() {
     return this.lane.phase === "coasting" || this.row.phase === "coasting"

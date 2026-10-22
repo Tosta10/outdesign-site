@@ -57,7 +57,7 @@ export function ContentSection({
           data-edit={editing ? "projects" : undefined}
           id="work"
         >
-          <WorkLab projects={c.projects} imageUrl={img} />
+          <WorkLab content={c} editing={editing} imageUrl={img} />
           {c.projects.length === 0 && <div className="lab-portfolio-empty"><span>目前尚無作品。</span><span>可在作者模式新增作品名稱、介紹與封面。</span></div>}
         </section>
       </>

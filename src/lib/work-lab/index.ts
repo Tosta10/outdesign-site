@@ -1,3 +1,5 @@
+import { resolveWorkLabConfig, labActions } from "../../../supabase/functions/_shared/work-lab-config.ts";
+import { patchLabConfig, takeLabCommands, type LabCommand } from "./bridge";
 import {
   families,
   normalizePreferences,
@@ -24,7 +26,7 @@ import type { SceneState } from "./scene";
 const live = new WeakMap<HTMLElement, () => void>();
 const key = "outdesign.work-lab.preferences.v2",
   saveKey = "outdesign.work-lab.saved.v1";
-export async function initWorkLab(root: HTMLElement): Promise<() => void> {
+export async function initWorkLab(root: HTMLElement, { authoring = false } = {}): Promise<() => void> {
   live.get(root)?.();
   const abort = new AbortController(),
     audio = new LabAudio();
@@ -49,8 +51,19 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
   } catch {
     /* Storage is optional. */
   }
+  const baseConfig = resolveWorkLabConfig(JSON.parse(root.dataset.labConfig || "null"));
+  const configuredPreferences = (config: typeof baseConfig, visitor?: unknown) => {
+    const local = !authoring && visitor && typeof visitor === "object" ? visitor as Record<string, unknown> : {};
+    return normalizePreferences({ ...config.options, motion: true,
+      sound: config.options.sound === "on", ambient: config.options.ambient === "on", volume: config.parameters.volume,
+      ...local, effects: { ...config.effects, ...(local.effects && typeof local.effects === "object" ? local.effects : {}) },
+    }, media.matches);
+  };
   const allItems = JSON.parse(root.dataset.labItems || "[]") as LabItem[];
   const state: SceneState = {
+    navigationUntil: 0,
+    config: baseConfig,
+    authoring,
     items: allItems,
     track: null,
     pointer: { x: 0, y: 0 },
@@ -58,15 +71,16 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
     row: 0,
     mode: "browse",
     exploded: false,
-    frosted: false,
+    frosted: baseConfig.options.glass === "frosted",
     rotation: { x: 0.08, y: 0.12 },
     pan: { x: 0, y: 0 },
     offset: { x: 0, y: 0 },
     zoom: 1,
     highlight: -1,
     wave: performance.now(),
-    preferences: normalizePreferences(stored, media.matches),
+    preferences: configuredPreferences(baseConfig, stored),
   };
+  const initialPreferences = structuredClone(state.preferences);
   let scene:
     | Awaited<ReturnType<(typeof import("./scene"))["createLabScene"]>>
     | undefined;
@@ -90,7 +104,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
       selector,
       createRollingText(element, {
         text: element.textContent || "",
-        duration: 460,
+        duration: baseConfig.parameters.transitionDuration * 1000,
         motionBlur: true,
         transition: "direct",
         stagger: "none",
@@ -104,7 +118,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
       value: 1,
       locales: "en-US",
       format: { minimumIntegerDigits: 2, useGrouping: false },
-      duration: 460,
+      duration: baseConfig.parameters.transitionDuration * 1000,
       motionBlur: true,
       animated: motionAllowed(state.preferences, "rollingText"),
     }),
@@ -115,6 +129,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
     if (reel) {
       reel.update({
         text: value,
+        duration: state.config.parameters.transitionDuration * 1000,
         animated: motionAllowed(state.preferences, "rollingText"),
         direction: rollingDirection,
       });
@@ -124,6 +139,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
     if (number) {
       number.update({
         value: Number(value),
+        duration: state.config.parameters.transitionDuration * 1000,
         animated: motionAllowed(state.preferences, "rollingNumbers"),
         direction: rollingDirection,
       });
@@ -171,7 +187,17 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
       status.textContent = "瀏覽器未允許儲存偏好，本次操作仍可繼續。";
     }
   }
+  const originalLabels = new Map<string, string>();
+  function buttonLabel(selector: string, active: boolean, alternate: string) {
+    if (authoring) return;
+    const button = q(selector), label = button.querySelector<HTMLElement>("[data-copy-key]") || button;
+    if (!originalLabels.has(selector)) originalLabels.set(selector, label.textContent || "");
+    label.textContent = active ? alternate : originalLabels.get(selector)!;
+  }
   function sync() {
+    root.style.setProperty("--lab-cover-scale", String(state.config.parameters.coverScale));
+    root.style.setProperty("--lab-cassette-color", state.preferences.theme === "dark" ? state.config.palette.darkShell : state.config.palette.shell);
+    root.dataset.labRuntimeConfig = JSON.stringify(state.config);
     const item = itemAtCell(state.items, state.lane, state.row);
     root.dataset.mode = state.mode;
     root.dataset.lane = String(state.lane);
@@ -246,7 +272,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
       "aria-pressed",
       String(state.frosted),
     );
-    if (state.mode === "inspect") {
+    if (state.mode === "inspect" && !authoring) {
       root.setAttribute("role", "dialog");
       root.setAttribute("aria-modal", "true");
     } else {
@@ -312,23 +338,17 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
       "aria-pressed",
       String(saved.includes(item.key)),
     );
-    q("[data-lab-action=save]").textContent = saved.includes(item.key)
-      ? "已收藏 ✓"
-      : "收藏作品 ＋";
+    buttonLabel("[data-lab-action=save]", saved.includes(item.key), "已收藏 ✓");
     q("[data-lab-action=explode]").setAttribute(
       "aria-pressed",
       String(state.exploded),
     );
-    q("[data-lab-action=explode]").textContent = state.exploded
-      ? "重組構件 −"
-      : "拆解構件 ＋";
+    buttonLabel("[data-lab-action=explode]", state.exploded, "重組構件 −");
     q("[data-lab-action=glass]").setAttribute(
       "aria-pressed",
       String(state.frosted),
     );
-    q("[data-lab-action=glass]").textContent = state.frosted
-      ? "切換清晰"
-      : "磨砂玻璃";
+    buttonLabel("[data-lab-action=glass]", state.frosted, "切換清晰");
     root
       .querySelectorAll<HTMLElement>("[data-lab-family-index]")
       .forEach((el) =>
@@ -362,7 +382,11 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
       );
     scene?.invalidate();
   }
+  let lastNavigation = -Infinity;
   function select(lane: number, row: number, open = false) {
+    const now = performance.now();
+    if (now - lastNavigation < 120) state.navigationUntil = now + 200;
+    lastNavigation = now;
     cancelAnimationFrame(coastFrame);
     rollingDirection = (row !== state.row ? row > state.row : lane > state.lane)
       ? "up"
@@ -431,7 +455,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
           : "進入 360° 物件檢視",
     );
     sync();
-    if (value === "browse" || value === "inspect")
+    if (!authoring && (value === "browse" || value === "inspect"))
       stage.focus({ preventScroll: true });
   }
   function tab(index: number) {
@@ -516,7 +540,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
       if (disposed) return;
       const p = Math.min(
         1,
-        (now - start) / (motionAllowed(state.preferences, "boot") ? 3200 : 1),
+        (now - start) / (motionAllowed(state.preferences, "boot") ? state.config.parameters.bootDuration * 1000 : 1),
       );
       overlay.style.setProperty("--boot", String(p));
       const message =
@@ -535,6 +559,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
     bootFrame = requestAnimationFrame(frame);
   }
   const click = (event: Event) => {
+    if (authoring) return;
     const target = event.target as Element;
     if (target.closest("[data-lab-close]")) {
       const dialog = target.closest<HTMLDialogElement>("dialog");
@@ -778,6 +803,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
     { signal: abort.signal },
   );
   const keyboard = (e: KeyboardEvent) => {
+    if (authoring) return;
     if (
       !root.isConnected ||
       !root.contains(document.activeElement) ||
@@ -890,6 +916,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
   stage.addEventListener(
     "pointerdown",
     (event) => {
+      if (authoring) return;
       if (state.mode === "inspect" && event.target instanceof HTMLCanvasElement)
         return;
       if ((event.target as Element).closest("button") || event.button > 1)
@@ -937,6 +964,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
   stage.addEventListener(
     "pointermove",
     (event) => {
+      if (authoring) return;
       if (!pointers.has(event.pointerId)) {
         if (event.pointerType === "mouse" && !drag) {
           const hovered = scene?.hover(event.clientX, event.clientY);
@@ -1019,7 +1047,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
       event.timeStamp,
       !motionAllowed(state.preferences, "dragMomentum"),
     );
-    const momentum = new ArchivePlaneMomentum(position, velocity);
+    const momentum = new ArchivePlaneMomentum(position, velocity, state.config.parameters.inertia, state.config.parameters.snapSpeed);
     let last = performance.now();
     const coast = (now: number) => {
       momentum.step(Math.min(0.05, Math.max(0, (now - last) / 1000)));
@@ -1052,6 +1080,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
   stage.addEventListener(
     "dblclick",
     (event) => {
+      if (authoring) return;
       if (!(event.target as Element).closest("button")) mode("detail");
     },
     { signal: abort.signal },
@@ -1062,6 +1091,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
   stage.addEventListener(
     "wheel",
     (event) => {
+      if (authoring) return;
       if (state.mode === "inspect") return;
       if ((event.target as Element).closest("button")) return;
       event.preventDefault();
@@ -1121,7 +1151,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
   const timer = setInterval(clock, 1000);
   clock();
   const gamepad = () => {
-    if (disposed) return;
+    if (disposed || authoring) return;
     const pad = navigator.getGamepads?.().find((p) => p?.connected);
     if (!pad) return;
     if (
@@ -1203,12 +1233,42 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
       .forEach((d) => d.close());
     scene?.dispose();
     audio.dispose();
+    delete root.dataset.labController;
     live.delete(root);
   };
+  function command(command: LabCommand) {
+    if (command.type === "view" && authoring) { skipBoot(); mode(command.value); return; }
+    if (command.type === "action" && Object.hasOwn(labActions, command.value)) {
+      if (command.value === "next") select(state.lane, state.row + 1);
+      else if (command.value === "previous") select(state.lane, state.row - 1);
+      else if (command.value === "next-column") stepColumn(1);
+      else if (command.value === "previous-column") stepColumn(-1);
+      else if (command.value === "open") mode("detail");
+      else if (command.value === "back") mode("browse");
+      else if (command.value === "inspect") mode("inspect");
+      else if (command.value === "explode") { state.exploded = !state.exploded; sync(); }
+      else if (command.value === "assemble") { state.exploded = false; sync(); }
+      else if (command.value === "glass") { state.frosted = !state.frosted; sync(); }
+      else if (command.value === "clear" || command.value === "frosted") { state.frosted = command.value === "frosted"; sync(); }
+      else if (command.value === "replay") boot();
+      else if (command.value === "reset") { scene?.resetViewer(); state.rotation = { x: .08, y: .12 }; state.pan = { x: 0, y: 0 }; state.zoom = 1; sync(); }
+      return;
+    }
+    const previous = state.config;
+    state.config = command.type === "reset-config" ? baseConfig : patchLabConfig(state.config, command);
+    if (previous === state.config) return;
+    state.preferences = command.type === "reset-config" ? structuredClone(initialPreferences) : configuredPreferences(state.config);
+    state.frosted = state.config.options.glass === "frosted";
+    // Settings changed through blocks are scoped to this runtime, not visitor storage.
+    if (!state.preferences.motion || !state.preferences.effects.boot) skipBoot();
+    sync();
+  }
+  root.addEventListener("outdesign:lab-command", ((event: CustomEvent<LabCommand>) => command(event.detail)) as EventListener, { signal: abort.signal });
+  root.dataset.labController = "ready";
   live.set(root, dispose);
   sync();
   tab(0);
-  stage.focus({ preventScroll: true });
+  if (!authoring) stage.focus({ preventScroll: true });
   try {
     const { createLabScene } = await import("./scene");
     if (disposed || !root.isConnected) {
@@ -1229,6 +1289,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
     q("[data-lab-render-status]").textContent = "WEBGL / LIVE";
     root.dataset.engine = "webgl";
     sync();
+    takeLabCommands(root).forEach(command);
     const hash = location.hash.slice(1);
     if (/^project-[0-9a-f-]{36}$/i.test(hash)) {
       const selected = allItems.find((item) => item.key === hash.slice(8));
@@ -1236,7 +1297,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
         const cell = locateItem(allItems, selected.key);
         select(cell.lane, cell.row, true);
       }
-    } else if (motionAllowed(state.preferences, "boot")) boot();
+    } else if (!authoring && state.mode === "browse" && motionAllowed(state.preferences, "boot")) boot();
   } catch {
     root.dataset.engine = "fallback";
     stage.dataset.ready = "fallback";
@@ -1244,6 +1305,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
     status.textContent =
       "此裝置無法建立 3D 場景。仍可搜尋、閱讀、收藏與匯出作品。";
     root.style.setProperty("--lab-reveal", "1");
+    takeLabCommands(root).forEach(command);
   }
   return dispose;
 }

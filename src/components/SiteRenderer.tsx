@@ -122,7 +122,7 @@ export function SiteRenderer({
             {...elementProps(c, "work", editing)}
             data-edit={editing ? "projects" : undefined}
           >
-            <WorkLab projects={c.projects} imageUrl={img} homeUrl={url()} />
+            <WorkLab content={c} editing={editing} imageUrl={img} homeUrl={url()} />
           </section>
           <div className="lab-author-overlay">{panels}</div>
         </main>

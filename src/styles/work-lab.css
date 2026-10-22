@@ -695,6 +695,34 @@
   object-fit: contain;
   background: #e2e9e4;
 }
+
+/* Use the same inset and cassette palette in WebGL and the fallback preview. */
+.work-lab .lab-illustrated-case {
+  aspect-ratio: 3.44 / 2.94;
+  background: var(--lab-cassette-color, #e1dcd1);
+}
+.work-lab .lab-illustrated-case > img {
+  position: absolute;
+  width: calc(var(--lab-cover-scale, .64) * 100%);
+  height: calc(var(--lab-cover-scale, .64) * 100%);
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: transparent;
+}
+.lab-header [data-menu-toggle] {
+  position: relative;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 22px;
+}
+.lab-header [data-menu-toggle] small {
+  font-size: 9px;
+  white-space: nowrap;
+}
+.work-lab-author-panel > summary { cursor: pointer; font-weight: 600; }
+.work-lab-author-panel details { margin-block: 12px; }
+.work-lab-author-panel .check-row { display: flex; align-items: center; gap: 8px; }
 .lab-poster-label {
   position: absolute;
   left: 16px;
@@ -2030,4 +2058,15 @@
 }
 .work-lab[data-motion="false"] * {
   transition: none !important;
+}
+
+.work-lab .lab-copy {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  display: inline;
+}
+.lab-browse-info > button:hover > .lab-copy { transform: none; }
+.work-lab:not([data-lab-authoring="true"]) [data-layer-hidden="true"] {
+  display: none !important;
 }

@@ -928,6 +928,25 @@
 .scratch-library-title { padding-block: 14px 10px; }
 .logic-categories { padding-bottom: 10px; }
 .scratch-library { min-height: 0; }
+.scratch-library > .work-lab-author-panel {
+  flex-shrink: 0;
+  max-height: 35vh;
+  overflow: auto;
+  padding: 12px;
+  border-bottom: 1px solid #c1d5f22a;
+}
+.scratch-library > .work-lab-author-panel input,
+.scratch-library > .work-lab-author-panel select {
+  width: 100%;
+  padding: 7px;
+  color: #dce5ef;
+  border: 1px solid #d0e2ff30;
+  border-radius: 5px;
+  background: #101722;
+}
+.scratch-library > .work-lab-author-panel input[type="checkbox"] { width: auto; }
+.scratch-library > .work-lab-author-panel label { display: grid; gap: 5px; margin-block: 8px; font-size: 11px; }
+.scratch-library .logic-library-content { min-height: 0; }
 @media (max-width: 600px) {
   .scratch-workspace { right: 0; bottom: 40%; }
   .scratch-library { top: 60%; width: 100%; border-top: 1px solid #ffffff25; }

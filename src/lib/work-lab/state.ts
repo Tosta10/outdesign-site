@@ -1,3 +1,4 @@
+import { labEffects } from "../../../supabase/functions/_shared/work-lab-config.ts";
 export type LabMode = "browse" | "detail" | "inspect";
 export const families = ["全部", "設計", "開發", "實驗"] as const;
 export type LabItem = {
@@ -102,22 +103,7 @@ export const parts = [
   "資訊基板",
   "固定構件",
 ];
-export const motionLabels = {
-  boot: "開場動畫",
-  selectionWave: "選取波浪",
-  idleWave: "閒置起伏",
-  pointerParallax: "指標視差",
-  dragMomentum: "拖曳慣性",
-  selectionTransition: "切列與切檔過渡",
-  detailTransition: "抽取與歸位鏡頭",
-  modelDecryption: "玻璃解密",
-  documentReveal: "文件揭示",
-  rollingText: "文字滾動",
-  rollingNumbers: "數字滾動",
-  surfaceTransitions: "面板轉場",
-  viewerNavigation: "360° 導覽阻尼",
-  viewerModelTransition: "拆解與重組過渡",
-} as const;
+export const motionLabels = labEffects;
 export type MotionKey = keyof typeof motionLabels;
 export type LabPreferences = {
   theme: "dark" | "light";

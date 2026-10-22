@@ -1,3 +1,8 @@
+import { useEffect, useRef, type CSSProperties } from "react";
+import { elementProps, presentationCopy } from "../lib/presentation";
+import { resolveWorkLabConfig } from "../../supabase/functions/_shared/work-lab-config";
+import { labCopyDefaults } from "../lib/work-lab/copy";
+import { sendLabCommand } from "../lib/work-lab/bridge";
 import {
   families,
   parts,
@@ -6,61 +11,89 @@ import {
 } from "../lib/work-lab/state";
 import type { SiteContent } from "../../supabase/functions/_shared/schema";
 export function WorkLab({
-  projects,
+  content,
+  editing = false,
   imageUrl,
   homeUrl = "/",
 }: {
-  projects: SiteContent["projects"];
+  content: SiteContent;
+  editing?: boolean;
   imageUrl: (value: string) => string;
   homeUrl?: string;
 }) {
+  const projects = content.projects;
+  const config = resolveWorkLabConfig(content.workLab);
+  const configJSON = JSON.stringify(config);
+  const sceneRoot = useRef<HTMLElement>(null);
+  const layer = (key: string) => elementProps(content, `lab-${key}`, editing);
+  const copy = (key: string) => <span className="lab-copy" {...elementProps(content, `copy-lab.${key}`, editing)} data-edit={editing ? `copy:lab.${key}` : undefined} data-copy-key={`lab.${key}`}>{presentationCopy(content, `lab.${key}`, labCopyDefaults[`lab.${key}`])}</span>;
   const items = createLabItems(
     projects.map((p) => ({ ...p, image: p.image ? imageUrl(p.image) : "" })),
   );
   const first = items[0];
+  const itemsJSON = JSON.stringify(items);
+  useEffect(() => {
+    if (!editing || !sceneRoot.current || sceneRoot.current.closest(".logic-inventory")) return;
+    const element = sceneRoot.current;
+    let disposed = false, cleanup: (() => void) | undefined;
+    void import("../lib/work-lab/index").then(async ({ initWorkLab }) => {
+      if (disposed) return;
+      const dispose = await initWorkLab(element, { authoring: true });
+      if (disposed) dispose(); else cleanup = dispose;
+    });
+    return () => { disposed = true; cleanup?.(); };
+  }, [editing, itemsJSON]);
+  useEffect(() => {
+    if (editing && sceneRoot.current) sendLabCommand(sceneRoot.current, { type: "config", value: resolveWorkLabConfig(JSON.parse(configJSON)) });
+  }, [editing, configJSON]);
   return (
     <section
+      ref={sceneRoot}
       className="work-lab"
+      data-lab-config={configJSON}
+      data-lab-authoring={editing || undefined}
+      style={{ "--lab-cover-scale": config.parameters.coverScale, "--lab-cassette-color": config.options.theme === "dark" ? config.palette.darkShell : config.palette.shell } as CSSProperties}
       data-work-lab
       data-lab-items={JSON.stringify(items)}
       data-mode="browse"
-      data-theme="light"
+      data-theme={config.options.theme}
       aria-label="OutDesign 玻璃卡帶作品展示"
     >
-      <header className="lab-header">
-        <a href={homeUrl} data-page-target="home" className="lab-wordmark">
+      <header className="lab-header" {...layer("header")}>
+        <a href={homeUrl} data-page-target="home" className="lab-wordmark" {...layer("brand")}>
           <span className="lab-symbol" aria-hidden="true">
             ◈
           </span>
           <span>
-            OUTDESIGN<small>CREATIVE INFORMATION</small>
-            <strong>ARCHIVE OS</strong>
+            {content.settings.name.toUpperCase()}<small>{copy("brand.sub")}</small>
+            <strong>{copy("brand.os")}</strong>
           </span>
         </a>
         <nav aria-label="作品展示工具">
-          <button data-lab-action="search" aria-label="搜尋作品">
+          <button {...layer("action-search-1")} data-lab-action="search" aria-label="搜尋作品">
             <span className="lab-search-glyph" aria-hidden="true">
               ⌕
             </span>{" "}
-            ARCHIVE INDEX <kbd>/</kbd>
+            {copy("search")}  <kbd>/</kbd>
           </button>
-          <button data-lab-action="saved" aria-label="檢視收藏作品">
-            ＋ SAVED <span data-lab-saved-count>00</span>
+          <button {...layer("action-saved-1")} data-lab-action="saved" aria-label="檢視收藏作品">
+            {copy("saved")}  <span data-lab-saved-count>00</span>
           </button>
-          <button data-lab-action="settings" aria-label="開啟展示設定">
+          <button {...layer("action-settings-1")} data-lab-action="settings" aria-label="開啟展示設定">
             <span className="lab-settings-glyph" aria-hidden="true">
               ◷
             </span>
-            <small>設定</small>
+            <small>{copy("settings")}</small>
           </button>
-          <button data-lab-action="fullscreen" aria-label="全螢幕作品展示">
+          <button {...layer("menu")} data-menu-toggle aria-controls="site-navigation" aria-expanded="false" aria-label="開啟選單"><span aria-hidden="true">☰</span><small>{copy("menu")}</small></button>
+          <button {...layer("action-fullscreen-1")} data-lab-action="fullscreen" aria-label="全螢幕作品展示">
             ⤢
           </button>
         </nav>
       </header>
-      <div className="lab-body">
+      <div className="lab-body" {...layer("body")}>
         <div
-          className="lab-stage"
+          className="lab-stage" {...layer("scene")}
           tabIndex={0}
           role="group"
           aria-label="三維作品陣列：上下鍵與滾輪切換作品，左右鍵切換分類，Enter 開啟；檢視時拖曳旋轉、雙指縮放"
@@ -90,37 +123,37 @@ export function WorkLab({
             <i />
           </div>
           <div className="lab-scan" aria-hidden="true" />
-          <div className="lab-stage-caption">
+          <div className="lab-stage-caption" {...layer("scene-caption")}>
             <span data-lab-render-status>準備互動場景</span>
-            <span>FLAT IMAGE / OPTICAL GLASS</span>
+            <span>{copy("surface")}</span>
           </div>
-          <button className="lab-stage-back" data-lab-action="back">
-            ← 作品陣列 <kbd>Esc</kbd>
+          <button className="lab-stage-back" {...layer("back")} data-lab-action="back">
+            {copy("archive")}  <kbd>Esc</kbd>
           </button>
-          <div className="lab-object-caption">
+          <div className="lab-object-caption" {...layer("object-caption")}>
             <strong data-lab-object-code>{first.code}</strong>
-            <small>CREATIVE ARCHIVE</small>
-            <p>DRAG TO INSPECT　↔</p>
-            <button data-lab-action="inspect">360° 卡帶檢視 ↗</button>
+            <small>{copy("creative")}</small>
+            <p>{copy("drag")}</p>
+            <button {...layer("action-inspect-1")} data-lab-action="inspect">{copy("inspect")}</button>
           </div>
-          <div className="lab-view-controls">
-            <button data-lab-action="glass" aria-pressed="false">
-              磨砂玻璃
+          <div className="lab-view-controls" {...layer("view-controls")}>
+            <button {...layer("action-glass-1")} data-lab-action="glass" aria-pressed="false">
+              {copy("glass")}
             </button>
-            <button data-lab-action="explode" aria-pressed="false">
-              拆解構件 ＋
+            <button {...layer("action-explode-1")} data-lab-action="explode" aria-pressed="false">
+              {copy("explode")}
             </button>
-            <button data-lab-action="reset">重設視角 ↗</button>
+            <button {...layer("action-reset-1")} data-lab-action="reset">{copy("reset")}</button>
           </div>
         </div>
-        <aside className="lab-browse-info" aria-label="目前選取的作品">
+        <aside className="lab-browse-info" {...layer("browse-info")} aria-label="目前選取的作品">
           <p className="lab-micro">
-            CREATIVE ARCHIVE /{" "}
+            {copy("creative")} /{" "}
             <span data-lab-browse-category>{first.category}</span>
           </p>
           <h1>
-            <button data-lab-action="open" aria-label="讀取目前作品">
-              FILE NUMBER: <span data-lab-browse-code>{first.code}</span>
+            <button {...layer("action-open-1")} data-lab-action="open" aria-label="讀取目前作品">
+              {copy("file")}  <span data-lab-browse-code>{first.code}</span>
               <i aria-hidden="true">↗</i>
             </button>
           </h1>
@@ -129,15 +162,15 @@ export function WorkLab({
           </div>
           <div className="lab-browse-summary">
             <h2 data-lab-browse-title>{first.title}</h2>
-            <small>REFERENCE AREA</small>
+            <small>{copy("reference")}</small>
           </div>
-          <button data-lab-action="open" aria-label="開啟作品">
-            ACCESS FILE <span>→</span>
+          <button {...layer("action-open-2")} data-lab-action="open" aria-label="開啟作品">
+            {copy("access")}  <span>→</span>
           </button>
         </aside>
-        <aside className="lab-detail" aria-label="作品資料" hidden>
+        <aside className="lab-detail" {...layer("detail")} aria-label="作品資料" hidden>
           <p className="lab-micro">
-            SELECTED WORK / <span data-lab-code>{first.code}</span>
+            {copy("selected")}  <span data-lab-code>{first.code}</span>
           </p>
           <h3 data-lab-title>{first.title}</h3>
           <p className="lab-english" data-lab-english>
@@ -145,28 +178,28 @@ export function WorkLab({
           </p>
           <dl>
             <div>
-              <dt>作品年份</dt>
+              <dt>{copy("year")}</dt>
               <dd data-lab-year>{first.year}</dd>
             </div>
             <div>
-              <dt>作品類別</dt>
+              <dt>{copy("category")}</dt>
               <dd data-lab-family>
                 {first.empty ? "待新增" : families[first.family]}
               </dd>
             </div>
             <div>
-              <dt>展示方式</dt>
-              <dd>平面封面 / 玻璃卡帶</dd>
+              <dt>{copy("format")}</dt>
+              <dd>{copy("flat")}</dd>
             </div>
             <div>
-              <dt>作品狀態</dt>
-              <dd>可讀取</dd>
+              <dt>{copy("status")}</dt>
+              <dd>{copy("readable")}</dd>
             </div>
           </dl>
-          <div className="lab-document" data-lab-document>
+          <div className="lab-document" {...layer("document")} data-lab-document>
             <div className="lab-tabs" role="tablist" aria-label="研究內容">
               {["作品介紹", "卡帶結構", "操作紀錄"].map((label, i) => (
-                <button
+                <button {...layer(`tab-${i}`)}
                   key={label}
                   role="tab"
                   aria-selected={i === 0}
@@ -174,7 +207,7 @@ export function WorkLab({
                   id={`od-lab-tab-button-${i}`}
                   data-lab-tab={i}
                 >
-                  {label}
+                  {copy(`tab.${i}`)}
                 </button>
               ))}
             </div>
@@ -196,7 +229,7 @@ export function WorkLab({
               <ol className="lab-parts">
                 {parts.map((part, i) => (
                   <li key={part}>
-                    <button data-lab-part={i}>
+                    <button {...layer(`part-${i}`)} data-lab-part={i}>
                       <span>0{i + 1}</span>
                       {part}
                       <i>↗</i>
@@ -218,10 +251,10 @@ export function WorkLab({
             </div>
           </div>
           <div className="lab-detail-actions">
-            <button data-lab-action="save" aria-pressed="false">
-              收藏作品 ＋
+            <button {...layer("action-save-1")} data-lab-action="save" aria-pressed="false">
+              {copy("save")}
             </button>
-            <button data-lab-action="export">匯出作品資料 ↓</button>
+            <button {...layer("action-export-1")} data-lab-action="export">{copy("export")}</button>
             <a
               className="lab-project-link"
               data-lab-project-link
@@ -230,13 +263,13 @@ export function WorkLab({
               target="_blank"
               rel="noopener noreferrer"
             >
-              前往作品 ↗
+              {copy("visit")}
             </a>
           </div>
         </aside>
       </div>
-      <div className="lab-counter">
-        <span>ARCHIVE / SELECT</span>
+      <div className="lab-counter" {...layer("counter")}>
+        <span>{copy("counter")}</span>
         <div>
           <span className="lab-number" data-lab-number>
             01
@@ -247,32 +280,32 @@ export function WorkLab({
           </span>
         </div>
       </div>
-      <div className="lab-navigation" aria-label="作品導覽">
-        <button data-lab-action="previous" aria-label="上一件作品">
+      <div className="lab-navigation" {...layer("navigation")} aria-label="作品導覽">
+        <button {...layer("action-previous-1")} data-lab-action="previous" aria-label="上一件作品">
           ↑
         </button>
         <div className="lab-ticks" data-lab-ticks />
-        <button data-lab-action="next" aria-label="下一件作品">
+        <button {...layer("action-next-1")} data-lab-action="next" aria-label="下一件作品">
           ↓
         </button>
       </div>
-      <div className="lab-archive-hint">
-        ← → 切換分類　 /　 ↑ ↓ 瀏覽作品　 /　 ENTER 讀取
+      <div className="lab-archive-hint" {...layer("hint")}>
+        {copy("keyboard")}
       </div>
       <div className="lab-hover-label" data-lab-hover hidden />
-      <div className="lab-powered">
+      <div className="lab-powered" {...layer("powered")}>
         POWERED BY <b>OUTDESIGN</b>
         <i />
       </div>
-      <div className="lab-column-control" aria-label="分類導覽">
-        <button data-lab-action="previous-column" aria-label="上一個分類">
+      <div className="lab-column-control" {...layer("columns")} aria-label="分類導覽">
+        <button {...layer("action-previous-column-1")} data-lab-action="previous-column" aria-label="上一個分類">
           ←
         </button>
         <div>
           <small data-lab-column-number>COLUMN 01 / 01</small>
           <span data-lab-column-label>{first.category}</span>
         </div>
-        <button data-lab-action="next-column" aria-label="下一個分類">
+        <button {...layer("action-next-column-1")} data-lab-action="next-column" aria-label="下一個分類">
           →
         </button>
       </div>
@@ -292,7 +325,7 @@ export function WorkLab({
           ))}
         </div>
       )}
-      <footer className="lab-footer">
+      <footer className="lab-footer" {...layer("footer")}>
         <span>
           <i /> ARCHIVE ONLINE{" "}
           <span
@@ -305,45 +338,37 @@ export function WorkLab({
           </span>
         </span>
         <div>
-          <button
-            data-menu-toggle
-            aria-controls="site-navigation"
-            aria-expanded="false"
-            aria-label="開啟選單"
-          >
-            選單 ↗
-          </button>
           <button data-studio-launch className="author-link">
-            作者模式
+            {copy("author")}
           </button>
           <time data-lab-clock>00:00:00</time>
-          <button data-lab-action="replay" aria-label="重播開場">
-            REINITIALIZE ↗
+          <button {...layer("action-replay-1")} data-lab-action="replay" aria-label="重播開場">
+            {copy("replay")}
           </button>
         </div>
       </footer>
-      <div className="lab-inspection-ui" hidden data-lab-inspection>
+      <div className="lab-inspection-ui" {...layer("inspection")} hidden data-lab-inspection>
         <header>
-          <button data-lab-action="close-inspect" aria-label="返回作品資料">
-            ← 返回作品 <kbd>ESC</kbd>
+          <button {...layer("action-close-inspect-1")} data-lab-action="close-inspect" aria-label="返回作品資料">
+            {copy("return")}  <kbd>ESC</kbd>
           </button>
           <div>
-            <small>OUTDESIGN / OBJECT STUDY</small>
-            <h2>玻璃卡帶</h2>
+            <small>{copy("object")}</small>
+            <h2>{copy("cassette")}</h2>
             <p data-lab-viewer-code>{first.code}</p>
           </div>
           <strong>360°</strong>
         </header>
         <div className="lab-viewer-surface" role="group" aria-label="玻璃模式">
-          <button data-lab-action="clear" aria-pressed="true">
-            清晰
+          <button {...layer("action-clear-1")} data-lab-action="clear" aria-pressed="true">
+            {copy("clear")}
           </button>
-          <button data-lab-action="frosted" aria-pressed="false">
-            磨砂
+          <button {...layer("action-frosted-1")} data-lab-action="frosted" aria-pressed="false">
+            {copy("frosted")}
           </button>
         </div>
         <aside aria-label="卡帶裝配結構">
-          <small>ASSEMBLY / 裝配結構</small>
+          <small>{copy("assembly")}</small>
           {parts.map((part, i) => (
             <p key={part}>
               <span>0{i + 1}</span>
@@ -352,12 +377,12 @@ export function WorkLab({
           ))}
         </aside>
         <footer>
-          <span>拖曳旋轉　 /　 方向鍵平移　 /　 滾輪或雙指縮放</span>
-          <button data-lab-action="assemble">− 一鍵重組</button>
+          <span>{copy("gesture")}</span>
+          <button {...layer("action-assemble-1")} data-lab-action="assemble">{copy("assemble")}</button>
         </footer>
       </div>
       <div className="lab-boot" hidden>
-        <button data-lab-action="skip">略過開場 ↗</button>
+        <button {...layer("action-skip-1")} data-lab-action="skip">略過開場 ↗</button>
         <svg viewBox="0 0 160 160" aria-hidden="true">
           <path d="M80 12 148 80 80 148 12 80Z" />
           <path d="M80 40 120 80 80 120 40 80Z" />
@@ -434,6 +459,7 @@ export function WorkLab({
             <option value="high">精細：環境遮蔽與景深</option>
           </select>
         </label>
+        <p data-lab-quality-status role="status" />
         <label>
           動態模式
           <select data-lab-setting="motionPreset">

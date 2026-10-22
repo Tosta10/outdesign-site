@@ -26,6 +26,7 @@ import {
 } from "../components/SiteRenderer";
 import { createBlockRecipe, type BlockRecipe } from "../lib/blocks";
 import { ElementStylePanel } from "./ElementStylePanel";
+import { WorkLabPanel } from "./WorkLabPanel";
 import { PresentationPanel } from "./PresentationPanel";
 import { copyDefaults } from "../lib/presentation";
 import { WorkspacePanel } from "./WorkspacePanel";
@@ -1266,6 +1267,7 @@ function Editor({
               <Icon name="close" size={18} />
             </button>
           </div>
+          {page === "work" && <WorkLabPanel content={content} update={update} />}
           <p className="selection-path">
             {pageNames[page]} /{" "}
             {selection.startsWith("element:")
