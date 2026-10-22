@@ -41,7 +41,18 @@ jobs:
         with:
           deno-version: v2.x
       - run: deno check --config supabase/functions/studio-api/deno.json supabase/functions/studio-api/index.ts
-      - run: pnpm exec playwright install --with-deps chromium
+      - name: Install browser dependencies
+        timeout-minutes: 6
+        run: |
+          # Hosted-runner mirror lists can select an unreachable Azure HTTP mirror.
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            echo 'https://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt > /dev/null
+          fi
+          if [ -f /etc/apt/apt-mirrors-security.txt ]; then
+            echo 'https://security.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors-security.txt > /dev/null
+          fi
+          echo 'Acquire::Retries "2"; Acquire::http::Timeout "30"; Acquire::https::Timeout "30";' | sudo tee /etc/apt/apt.conf.d/99-outdesign-timeouts > /dev/null
+          pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
         env:
           CI: true
