@@ -40,7 +40,7 @@ test("workspace rejects cycles, missing parents, cross-page nesting and unbounde
 });
 test("page selection follows the page and removed theme names migrate to Prism", () => {
   assert.equal(selectedForPage(initialContent, "home"), "hero");
-  assert.match(selectedForPage(initialContent, "work"), /^project:/);
+  assert.equal(selectedForPage(initialContent, "work"), "projects");
   assert.match(selectedForPage(initialContent, "journal"), /^note:/);
   assert.equal(selectedForPage(initialContent, "resources"), "attachments");
   for (const theme of ["quiet", "luminous"])

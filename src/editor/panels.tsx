@@ -568,7 +568,7 @@ export function ContentPanel({
                   category: "設計",
                   description: "在這裡介紹你的作品。",
                   year: new Date().getUTCFullYear().toString(),
-                  image: "/assets/work-quiet.svg",
+                  image: "",
                   alt: "作品封面",
                   url: "",
                   tone: "lilac",

@@ -343,7 +343,7 @@ test("content validation rejects script URLs, unknown fields, excessive blocks, 
   assert.equal(
     contentSchema.safeParse({
       ...initialContent,
-      projects: Array(25).fill(initialContent.projects[0]),
+      projects: Array(25).fill({id: crypto.randomUUID(), title: "Work", category: "設計", description: "", year: "2026", image: "", alt: "", url: "", tone: "silver", demo: false}),
     }).success,
     false,
   );

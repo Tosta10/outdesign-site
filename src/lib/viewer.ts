@@ -3,6 +3,14 @@ export function initViewer(root: Document | HTMLElement): () => void {
   if (root.querySelector('.site[data-editing="true"]')) return () => {};
   const disposeEffects = initEffects(root);
   const abort = new AbortController();
+  const workLabs: (() => void)[] = [];
+  root.querySelectorAll<HTMLElement>("[data-work-lab]").forEach((element) => {
+    import("./work-lab/index").then(async ({ initWorkLab }) => {
+      if (abort.signal.aborted) return;
+      const dispose = await initWorkLab(element);
+      if (abort.signal.aborted) dispose(); else workLabs.push(dispose);
+    }).catch(() => { element.dataset.engine = "fallback"; });
+  });
   let disposeLogic: (() => void) | undefined;
   const logicSource = root.querySelector("[data-site-logic]")?.textContent;
   if (logicSource)
@@ -128,6 +136,7 @@ export function initViewer(root: Document | HTMLElement): () => void {
   return () => {
     disposeEffects();
     disposeLogic?.();
+    workLabs.forEach((dispose) => dispose());
     abort.abort();
     audio?.pause();
     if (menu?.open) menu.close();

@@ -527,13 +527,13 @@ export async function studioRegression({
   await button("繼續編輯").click();
   await label("預覽頁面").selectOption("work");
   await settleCanvas();
-  await page.locator(".editor-canvas .work-image-button").first().click();
+  await page.locator(".editor-canvas [data-lab-action=settings]").click();
   assert.equal(
     await page.locator(".editor-canvas .detail-dialog[open]").count(),
     0,
   );
   await tab("內容").click();
-  await selectLayer("Quiet Interfaces");
+  await selectLayer("作品區塊");
   await button("新增作品").click();
   await label("作品名稱").fill("OutDesign Lab");
   await tab("媒體").click();
@@ -580,7 +580,7 @@ export async function studioRegression({
   const after = await (await fetch(api.url + "/api/public")).json();
   assert.equal(after.content.hero.line1, "讓創意，有方向。");
   assert.equal(after.content.settings.pageTitles.home, "OutDesign Studio");
-  assert.equal(after.content.projects.length, 4);
+  assert.equal(after.content.projects.length, 1);
   assert.equal(after.content.workspace.scripts.length, 2);
   assert.equal(
     after.content.workspace.presets,

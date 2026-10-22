@@ -3,6 +3,7 @@ import { elementProps } from "../lib/presentation";
 import { assetUrl } from "../lib/content";
 import { EditableText } from "./EditableText";
 import { Icon } from "./Icon";
+import { WorkLab } from "./WorkLab";
 import { SourceValue } from "./SourceValue";
 export type SectionKey = "work" | "notes" | "about" | "attachments" | "contact";
 export const defaultSections: SectionKey[] = [
@@ -53,131 +54,11 @@ export function ContentSection({
           className="work-section section-shell"
           data-layout="section:work"
           {...elementProps(c, "work", editing)}
+          data-edit={editing ? "projects" : undefined}
           id="work"
         >
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow section-number">
-                {text("work.eyebrow", "01 / SELECTED WORK")}
-              </p>
-              <h2>
-                {text("work.heading.first")}
-                <span className="muted">{text("work.heading.second")}</span>
-              </h2>
-            </div>
-            <p className="section-intro">{text("work.description")}</p>
-          </div>
-          <div className="work-toolbar">
-            <div className="filters" role="group" aria-label="作品分類">
-              {["全部", "設計", "開發", "實驗"].map((tag, i) => (
-                <button
-                  key={tag}
-                  data-filter={tag}
-                  aria-pressed={i === 0}
-                  className={i === 0 ? "active" : ""}
-                >
-                  {text(`filter.${i}`, tag)}
-                  {i === 0 && (
-                    <span>{String(c.projects.length).padStart(2, "0")}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-            <span className="tiny-label">{text("work.collection")}</span>
-          </div>
-          <div className="work-grid">
-            {c.projects.map((p, i) => (
-              <article
-                key={p.id}
-                className={`work-card work-${p.tone} ${editing && selected === `project:${p.id}` ? "is-selected" : ""}`}
-                data-layout={`project:${p.id}`}
-                {...elementProps(c, `project-${p.id}`, editing)}
-                data-category={p.category}
-                data-edit={editing ? `project:${p.id}` : undefined}
-              >
-                <button
-                  className="work-image-button"
-                  data-optical-card
-                  data-open-dialog={`project-${p.id}`}
-                  aria-label={`查看作品：${p.title}`}
-                >
-                  <div className="work-image">
-                    {p.image && (
-                      <img
-                        {...elementProps(
-                          c,
-                          `field-projects-${p.id}-image`,
-                          editing,
-                        )}
-                        src={img(p.image)}
-                        alt={p.alt}
-                        width="1200"
-                        height="820"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    )}
-                  </div>
-                  <span className="work-index">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span className="work-arrow">
-                    <Icon name="diagonal" />
-                  </span>
-                  {p.demo && <span className="demo-tag">概念示範</span>}
-                </button>
-                <div className="work-caption">
-                  <div>
-                    <h3>{value(`projects.${p.id}.title`)}</h3>
-                    <p>
-                      {p.category}
-                      <span>／</span>
-                      {value(`projects.${p.id}.year`)}
-                    </p>
-                  </div>
-                  <span className="caption-index">↗</span>
-                </div>
-                <dialog id={`project-${p.id}`} className="detail-dialog">
-                  <button
-                    className="icon-button dialog-close"
-                    data-close-dialog
-                    aria-label="關閉作品"
-                  >
-                    <Icon name="close" />
-                  </button>
-                  <p className="eyebrow">
-                    {p.category} / {p.year}
-                    {p.demo ? " / 概念示範" : ""}
-                  </p>
-                  <h2>{p.title}</h2>
-                  {p.image && (
-                    <img
-                      src={img(p.image)}
-                      alt={p.alt}
-                      width="1200"
-                      height="820"
-                      loading="lazy"
-                    />
-                  )}
-                  <p className="preserve-lines">{p.description}</p>
-                  {p.url && (
-                    <a
-                      href={p.url}
-                      className="button button-white"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      前往作品
-                      <Icon name="diagonal" size={17} />
-                    </a>
-                  )}
-                </dialog>
-              </article>
-            ))}
-          </div>
-          {c.projects.length === 0 && (
-            <p className="empty-state">作品正在整理中，敬請期待。</p>
-          )}
+          <WorkLab projects={c.projects} imageUrl={img} />
+          {c.projects.length === 0 && <div className="lab-portfolio-empty"><span>目前尚無作品。</span><span>可在作者模式新增作品名稱、介紹與封面。</span></div>}
         </section>
       </>
     ),

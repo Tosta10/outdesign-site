@@ -39,6 +39,7 @@ export const layerNames: Record<string, string> = {
   "page-intro": "頁面標題",
 };
 export function selectionKey(selection: Selection, page: string): string {
+  if (selection === "projects") return "work";
   if (selection.startsWith("element:")) return selection.slice(8);
   if (selection.startsWith("copy:")) return `copy-${selection.slice(5)}`;
   if (selection.includes(":")) return selection.replace(":", "-");
