@@ -35,7 +35,9 @@ export async function workLabTrackingRegression({ browser, origin }) {
   // SwiftShader, accidentally testing sparse taps instead of a held key.
   await page.keyboard.down("ArrowDown");
   const held = await stage.evaluate(async el => {
-    for (let n = 0; n < 100; n++) {
+    // Slow GPUs need a longer hold to supply enough distinct frames; retain a
+    // bounded input budget so a stalled renderer still fails this regression.
+    for (let n = 0; n < 1000 && (n < 100 || el.trackingProbe.held.length < 24); n++) {
       await new Promise(resolve => setTimeout(resolve, 25));
       el.trackingProbe.repeats++;
       el.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", repeat: true, bubbles: true, cancelable: true }));
