@@ -88,7 +88,7 @@ test("archive columns keep independent work rows and wrap without diagonal index
   assert.equal(itemAtCell(items, 2, 4).key, projects[0].id);
   assert.deepEqual(locateItem(items, projects[4].id), { lane: 1, row: 0 });
   assert.ok(
-    ARCHIVE_LAYOUT.rowGap > ARCHIVE_LAYOUT.depth,
+    ARCHIVE_LAYOUT.rowGap > ARCHIVE_LAYOUT.cassetteDepth,
     "Upright cassettes never occupy neighboring depth slots",
   );
   assert.ok(ARCHIVE_LAYOUT.columnGap > ARCHIVE_LAYOUT.width);

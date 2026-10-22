@@ -200,7 +200,8 @@ export const ARCHIVE_LAYOUT = {
   height: 2.94,
   depth: 0.22,
   columnGap: 4.15,
-  rowGap: 0.48,
+  rowGap: 0.62,
+  cassetteDepth: 0.5,
   lanes: 9,
   rows: 65,
 } as const;
