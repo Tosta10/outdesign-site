@@ -207,6 +207,14 @@ export type Assembly = z.infer<typeof assemblySchema>;
 // A bounded, declarative language. No arbitrary JavaScript or unbounded loops.
 export const logicOperation = z.enum([
   "move",
+  "move-y",
+  "set-x",
+  "set-y",
+  "text-color",
+  "radius",
+  "blur",
+  "reset-transform",
+  "stop",
   "rotate",
   "scale",
   "opacity",
@@ -274,7 +282,7 @@ export const logicScriptSchema = z
         ids.add(b.id);
         if (
           (b.op === "link" && !externalUrl.safeParse(b.value).success) ||
-          (b.op === "color" && !/^#[0-9a-f]{6}$/i.test(b.value))
+          (["color", "text-color"].includes(b.op) && !/^#[0-9a-f]{6}$/i.test(b.value))
         )
           ctx.addIssue({
             code: "custom",

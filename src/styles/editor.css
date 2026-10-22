@@ -257,25 +257,7 @@
 .panel-open .editor-canvas {
   right: 354px;
 }
-.editor-canvas .section-shell,
-.editor-canvas .site-header {
-  width: calc(100% - 72px);
-}
-.editor-canvas .hero h1 {
-  font-size: clamp(46px, 5.1vw, 74px);
-}
-.editor-canvas .hero {
-  min-height: 650px;
-}
-.editor-canvas .hero .eyebrow {
-  font-size: 7px;
-}
-.editor-canvas .wordmark-sub {
-  display: none;
-}
-.editor-canvas .desktop-nav {
-  gap: 22px;
-}
+
 .editor-panel {
   position: absolute;
   right: 0;
@@ -799,73 +781,7 @@
   .save-status {
     font-size: 9px;
   }
-  .editor-canvas .hero {
-    grid-template-columns: 1fr;
-    min-height: 0;
-    padding-top: 40px;
-    padding-bottom: 85px;
-  }
-  .editor-canvas .hero h1 {
-    font-size: 65px;
-  }
-  .editor-canvas .hero-art {
-    height: 380px;
-    margin: 0 auto -25px;
-    width: 100%;
-    max-width: 470px;
-  }
-  .editor-canvas .section-shell,
-  .editor-canvas .site-header {
-    width: calc(100% - 44px);
-  }
-  .editor-canvas .hero-art img {
-    height: 100%;
-  }
-  .editor-canvas .hero-art figcaption {
-    bottom: 8px;
-  }
-  .editor-canvas .about-section {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-  .editor-canvas .desktop-nav {
-    display: none;
-  }
-  .editor-canvas .contact-pill {
-    margin-left: auto;
-  }
-  .editor-canvas .work-grid {
-    grid-template-columns: 1fr;
-  }
-  .editor-canvas .work-card:last-child:nth-child(odd) {
-    grid-column: auto;
-  }
-  .editor-canvas .work-card:last-child:nth-child(odd) .work-image {
-    aspect-ratio: 1.48;
-  }
-  .editor-canvas .note-item summary {
-    grid-template-columns: 1fr 24px;
-  }
-  .editor-canvas .note-date {
-    grid-column: 1;
-  }
-  .editor-canvas .note-item h3 {
-    grid-column: 1;
-    grid-row: 2;
-  }
-  .editor-canvas .note-tag {
-    display: none;
-  }
-  .editor-canvas .note-plus {
-    grid-column: 2;
-    grid-row: 1/3;
-  }
-  .editor-canvas .note-body {
-    padding-left: 0;
-  }
-  .editor-canvas .section-intro {
-    display: none;
-  }
+
 }
 @media (max-width: 850px) {
   .panel-open .editor-canvas {
@@ -894,37 +810,7 @@
   .save-button {
     display: none;
   }
-  .editor-canvas .hero {
-    grid-template-columns: 1.1fr 1fr;
-    min-height: 650px;
-  }
-  .editor-canvas .hero h1 {
-    font-size: 64px;
-  }
-  .editor-canvas .hero-art {
-    height: 480px;
-    max-width: none;
-    align-self: center;
-    margin-left: -20px;
-  }
-  .editor-canvas .hero-art figcaption {
-    font-size: 5px;
-    left: 0;
-    right: 0;
-  }
-  .editor-canvas .desktop-nav {
-    display: flex;
-  }
-  .editor-canvas .work-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-  .editor-canvas .work-card:last-child:nth-child(odd) {
-    grid-column: 1/-1;
-  }
-  .editor-canvas .about-section {
-    grid-template-columns: 1fr 1fr;
-    gap: 30px;
-  }
+
 }
 @media (max-width: 600px) {
   .auth-dialog {
@@ -966,36 +852,7 @@
   .editor-top-actions > .icon-button {
     width: 26px;
   }
-  .editor-canvas .hero {
-    grid-template-columns: 1fr;
-    min-height: 0;
-  }
-  .editor-canvas .hero h1 {
-    font-size: 56px;
-  }
-  .editor-canvas .hero-art {
-    height: 355px;
-    margin: 0 auto -20px;
-    max-width: 440px;
-  }
-  .editor-canvas .hero-art figcaption {
-    font-size: 6px;
-    left: 20px;
-    right: 16px;
-  }
-  .editor-canvas .desktop-nav {
-    display: none;
-  }
-  .editor-canvas .work-grid,
-  .editor-canvas .about-section {
-    grid-template-columns: 1fr;
-  }
-  .editor-canvas .work-card:last-child:nth-child(odd) {
-    grid-column: auto;
-  }
-  .editor-canvas .hero .eyebrow {
-    font-size: 7px;
-  }
+
   .panel-heading {
     padding-top: 20px;
   }
@@ -1177,108 +1034,7 @@
 .editor-canvas {
   background: #0a0a0a;
 }
-.editor-canvas .hero-frame {
-  width: calc(100% - 36px);
-  margin-top: 18px;
-}
-.editor-canvas .site-header {
-  width: 100%;
-  padding: 0 25px;
-  height: 78px;
-}
-.editor-canvas .header-caption,
-.editor-canvas .header-author,
-.editor-canvas .header-divider {
-  display: none;
-}
-.editor-canvas .hero {
-  min-height: 640px;
-  height: auto;
-  padding: 45px 5.7% 290px;
-}
-.editor-canvas .hero-copy {
-  width: 49%;
-}
-.editor-canvas .hero h1 {
-  font-size: clamp(38px, 4.2vw, 67px);
-}
-.editor-canvas .hero-description {
-  font-size: 10px;
-  line-height: 2;
-}
-.editor-canvas .hero .eyebrow {
-  font-size: 6px;
-  letter-spacing: 1.4px;
-}
-.editor-canvas .mission-card {
-  top: 65px;
-  width: 43%;
-  padding: 20px;
-}
-.editor-canvas .mission-body {
-  gap: 13px;
-}
-.editor-canvas .mission-card h2 {
-  font-size: 22px;
-}
-.editor-canvas .mission-description {
-  font-size: 9px;
-}
-.editor-canvas .mission-kicker {
-  font-size: 11px;
-}
-.editor-canvas .mission-study {
-  padding-left: 10px;
-}
-.editor-canvas .mission-values {
-  font-size: 5px;
-  letter-spacing: 1px;
-}
-.editor-canvas .mission-link {
-  font-size: 8px;
-  gap: 8px;
-}
-.editor-canvas .featured-card {
-  bottom: 80px;
-  width: 46%;
-}
-.editor-canvas .section-shell {
-  width: calc(100% - 72px);
-}
-.editor-canvas .page-content > section {
-  padding-block: 80px;
-}
-.editor-canvas .hero-bottom {
-  bottom: 22px;
-}
-.editor-canvas .hero-signature {
-  font-size: 5px;
-  letter-spacing: 0.6px;
-}
-.editor-canvas .work-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.editor-canvas .note-item summary {
-  grid-template-columns: 80px 1fr 22px;
-  gap: 14px;
-}
-.editor-canvas .note-item summary h3 {
-  font-size: 18px;
-}
-.editor-canvas .note-tag {
-  display: none;
-}
-.editor-canvas .note-plus {
-  grid-column: auto;
-  grid-row: auto;
-}
-.editor-canvas .note-body {
-  padding-left: 94px;
-  padding-right: 0;
-}
-.editor-canvas .about-section {
-  gap: 30px;
-}
+
 .canvas-toolbar {
   position: absolute;
   z-index: 95;
@@ -1355,21 +1111,7 @@
   .editor-title > .editor-badge {
     display: none;
   }
-  .editor-canvas .hero {
-    padding-bottom: 280px;
-  }
-  .editor-canvas .mission-study {
-    display: none;
-  }
-  .editor-canvas .mission-body {
-    grid-template-columns: 1fr;
-  }
-  .editor-canvas .featured-card {
-    width: 65%;
-  }
-  .editor-canvas .about-section {
-    grid-template-columns: 1fr;
-  }
+
 }
 @media (max-width: 1000px) {
   .has-layers .editor-canvas {
@@ -1409,37 +1151,7 @@
     background: #141414;
     box-shadow: none;
   }
-  .editor-canvas .hero {
-    padding-bottom: 80px;
-  }
-  .editor-canvas .hero-copy {
-    width: 100%;
-  }
-  .editor-canvas .hero h1 {
-    font-size: 60px;
-  }
-  .editor-canvas .mission-card {
-    position: relative;
-    top: auto;
-    width: 100%;
-    right: auto;
-    margin-top: 40px;
-  }
-  .editor-canvas .mission-body {
-    grid-template-columns: 1.7fr 1fr;
-  }
-  .editor-canvas .mission-study {
-    display: flex;
-  }
-  .editor-canvas .featured-card {
-    position: relative;
-    left: auto;
-    bottom: auto;
-    width: 100%;
-  }
-  .editor-canvas .hero-signature {
-    display: none;
-  }
+
 }
 @media (max-width: 600px) {
   .editor-title > span:first-child {
@@ -1458,42 +1170,7 @@
   .editor-layers {
     top: 54px;
   }
-  .editor-canvas .hero {
-    padding-top: 35px;
-  }
-  .editor-canvas .hero h1 {
-    font-size: 48px;
-  }
-  .editor-canvas .hero-frame {
-    width: calc(100% - 20px);
-    margin-top: 10px;
-  }
-  .editor-canvas .site-header {
-    padding-inline: 20px;
-  }
-  .editor-canvas .hero-copy > .eyebrow {
-    font-size: 6px;
-  }
-  .editor-canvas .section-shell {
-    width: calc(100% - 44px);
-  }
-  .editor-canvas .work-grid,
-  .editor-canvas .about-section {
-    grid-template-columns: 1fr;
-  }
-  .editor-canvas .note-item summary {
-    grid-template-columns: 1fr 20px;
-  }
-  .editor-canvas .note-item h3 {
-    grid-column: 1;
-  }
-  .editor-canvas .note-plus {
-    grid-column: 2;
-    grid-row: 1/4;
-  }
-  .editor-canvas .note-body {
-    padding-left: 0;
-  }
+
   .canvas-toolbar {
     bottom: 15px;
   }
@@ -1502,15 +1179,7 @@
   .editor-title {
     display: none;
   }
-  .editor-canvas .hero h1 {
-    font-size: 42px;
-  }
-  .editor-canvas .mission-body {
-    grid-template-columns: 1fr;
-  }
-  .editor-canvas .mission-study {
-    display: none;
-  }
+
 }
 
 /* Author tools share the existing restrained panel language. */
@@ -1612,17 +1281,6 @@
     inset: 68px 8px 8px;
     padding: 14px;
   }
-}
-
-/* Keep the featured entry in flow as copy grows, also in the author canvas. */
-.editor-canvas .site .featured-card {
-  position: relative;
-  left: auto;
-  bottom: auto;
-}
-.editor-canvas .site .hero {
-  padding-bottom: 105px;
-  max-height: none;
 }
 
 /* Canvas workspace: selection and manipulation are separate from visitor interactions. */
@@ -1767,34 +1425,7 @@
 .scoped-code .code-input {
   min-height: 260px;
 }
-@container site (max-width: 760px) {
-  .editor-canvas .site .hero {
-    display: flex;
-    flex-direction: column;
-    padding: 40px 24px 85px;
-    min-height: 0;
-  }
-  .editor-canvas .site .hero-copy {
-    width: 100%;
-  }
-  .editor-canvas .site .mission-card {
-    position: relative;
-    top: auto;
-    right: auto;
-    width: 100%;
-    margin-top: 48px;
-  }
-  .editor-canvas .site .featured-card {
-    width: 100%;
-    margin-top: 22px;
-  }
-  .editor-canvas .site .hero h1 {
-    font-size: clamp(40px, 9cqw, 66px);
-  }
-  .editor-canvas .site .hero-signature {
-    display: none;
-  }
-}
+
 @media (max-width: 1000px) {
   .canvas-view-tools {
     left: 12px;

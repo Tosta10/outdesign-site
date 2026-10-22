@@ -38,6 +38,22 @@ export async function studioRegression({
     await page.mouse.up();
     await settleCanvas();
   };
+  // Compare the real website and author canvas at identical logical widths.
+  const visitor = await page.context().newPage();
+  await visitor.goto(page.url(), { waitUntil: "networkidle" });
+  const layout = (el) => {
+    const s = getComputedStyle(el);
+    return [s.position, s.width, s.padding, s.fontSize, s.gridTemplateColumns, s.flexDirection];
+  };
+  for (const width of [1440, 768, 390]) {
+    await visitor.setViewportSize({ width, height: 1080 });
+    await label("畫布裝置").selectOption(String(width));
+    await settleCanvas();
+    for (const selector of [".hero", ".mission-card", ".mission-card h2", ".hero h1", ".site-header"])
+      assert.deepEqual(await page.locator(".editor-canvas " + selector).evaluate(layout), await visitor.locator(selector).evaluate(layout), `Public/editor parity at ${width}: ${selector}`);
+  }
+  await visitor.close();
+  await label("畫布裝置").selectOption("auto");
   const source = page.locator(
     '.editor-canvas [data-element-key="field-about-title"]',
   );
@@ -65,10 +81,31 @@ export async function studioRegression({
     "rgb(38, 132, 255)",
   );
   // Direct pointer drag of a built-in card makes one undo step.
-  await gesture(page.locator(".editor-canvas .mission-card"), 40, 24);
+  const card = page.locator(".editor-canvas .mission-card");
+  await card.scrollIntoViewIfNeeded();
+  const cardBefore = await card.boundingBox();
+  await gesture(card, 40, 24);
+  const cardAfter = await card.boundingBox();
+  assert.ok(Math.abs(cardAfter.x - cardBefore.x - 40) <= 2, "No horizontal layout jump after release");
+  assert.ok(Math.abs(cardAfter.y - cardBefore.y - 24) <= 2, "No vertical layout jump after release");
   await tab("佈局").click();
   assert.ok(Number(await label("水平位移").inputValue()) >= 32);
+  assert.equal(await page.locator(".editor-canvas .mission-card").evaluate((el) => getComputedStyle(el).position), "absolute", "Dragging preserves the card's original positioning");
   await undo();
+  await page.locator(".editor-toolstrip").click({ position: { x: 2, y: 2 } });
+  await page.keyboard.down("Alt");
+  await page.locator(".editor-canvas").hover({ position: { x: 15, y: 15 } });
+  await page.mouse.wheel(0, -120);
+  await page.keyboard.up("Alt");
+  assert.ok(Number(await label("畫布縮放").inputValue()) > 1, "Alt-wheel zooms the canvas");
+  await page.keyboard.press("Control+0");
+  assert.equal(await label("畫布縮放").inputValue(), "1");
+  await label("畫布裝置").selectOption("390");
+  await settleCanvas();
+  assert.equal(await card.evaluate((el) => getComputedStyle(el).position), "relative");
+  assert.equal(await page.locator(".editor-canvas .hero").evaluate((el) => getComputedStyle(el).flexDirection), "column");
+  await label("畫布裝置").selectOption("auto");
+  await settleCanvas();
   await button("刪除選取圖層").click();
   await settleCanvas();
   assert.equal(
@@ -280,6 +317,8 @@ export async function studioRegression({
   );
   await label("腳本目標物件").selectOption("element:field-hero-line1");
   await button("物件圖層 · 指定既有內容").click();
+  assert.equal(await page.locator(".scratch-stack").count(), 0, "Clicking the library does not insert");
+  await button("物件圖層 · 指定既有內容").dragTo(page.locator(".scratch-plane"), { targetPosition: { x: 40, y: 50 } });
   const stack = page.locator(".scratch-stack").first();
   await stack.locator(".scratch-object").dblclick();
   await label("物件腳本名稱").fill("標題互動");
@@ -287,6 +326,20 @@ export async function studioRegression({
   const dragBlock = async (name, target) => {
     await button(name).dragTo(target);
   };
+  await page.frameLocator('iframe[title="積木即時預覽"]').locator(".mission-card").waitFor();
+  await label("即時預覽裝置").selectOption("390");
+  assert.equal(await page.frameLocator('iframe[title="積木即時預覽"]').locator(".mission-card").evaluate((el) => getComputedStyle(el).position), "relative");
+  await label("即時預覽裝置").selectOption("1280");
+  await label("即時預覽縮放").fill("1.5");
+  assert.equal(await label("即時預覽縮放").inputValue(), "1.5");
+  await page.locator(".scratch-scroll").click({ position: { x: 700, y: 350 } });
+  await page.keyboard.down("Space");
+  await page.mouse.down();
+  await page.mouse.move(600, 350, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.up("Space");
+  assert.ok(await page.locator(".scratch-scroll").evaluate((el) => el.scrollLeft > 0 || el.scrollTop > 0), "Space pans the block workspace");
+  await page.locator(".scratch-scroll").evaluate((el) => el.scrollTo(0, 0));
   await tab("變數與判斷").click();
   await dragBlock(/^變數設為/, stack.locator(".logic-drop-slot").first());
   // The nested language builds a real if/else branch, then executes it in preview.
@@ -318,6 +371,18 @@ export async function studioRegression({
     .dblclick();
   await label("積木數值參數").fill("50");
   await button("完成").click();
+  const connected = stack.locator(":scope > .logic-block-unit > .scratch-block");
+  const bounds = await connected.evaluateAll((els) => els.map((el) => ({ top: el.getBoundingClientRect().top, bottom: el.getBoundingClientRect().bottom })));
+  assert.ok(bounds.length >= 2);
+  assert.ok(Math.abs(bounds[1].top - bounds[0].bottom) <= 2, "Connected blocks touch");
+  await stack.locator(".scratch-object").click();
+  const scriptCount = await page.locator(".scratch-stack").count();
+  await page.keyboard.press("Control+d");
+  await settleCanvas();
+  assert.equal(await page.locator(".scratch-stack").count(), scriptCount + 1, "Ctrl+D duplicates the selected script");
+  await page.keyboard.press("Control+z");
+  await settleCanvas();
+  assert.equal(await page.locator(".scratch-stack").count(), scriptCount, "Ctrl+Z undoes script duplication");
   await tab("事件").click();
   await button("當 游標進入 時").dragTo(stack.locator(".scratch-event"));
   await stack.locator(".scratch-event").dblclick();
@@ -333,8 +398,10 @@ export async function studioRegression({
     repeatBranch.locator(".logic-drop-slot").first(),
   );
   await button(/^旋轉/).dragTo(repeatBranch.locator(".logic-drop-slot").last());
+  await button(/^垂直移動/).dragTo(repeatBranch.locator(".logic-drop-slot").last());
   await page.screenshot({ path: "artifacts/scratch-logic-workspace.png" });
   const logicAxe = await new AxeBuilder({ page })
+    .exclude(".mini-preview-viewport")
     .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
     .analyze();
   await writeFile(
@@ -372,6 +439,29 @@ export async function studioRegression({
       ) === 72,
   );
   assert.equal(await runningTitle.evaluate((el) => el.style.rotate), "3deg");
+  assert.equal(await runningTitle.evaluate((el) => el.style.translate), "72px 72px", "New vertical movement executes and saves through the API");
+  const runtime = await page.evaluate(async () => {
+    const { initLogic } = await import("/src/lib/logic-runtime.ts");
+    const root = document.createElement("div");
+    root.style.cssText = "position:fixed;left:-5000px;width:320px";
+    root.innerHTML = '<div class="site"><span data-element-key="runtime-target" style="display:block;translate:12px 8px;opacity:1">runtime</span></div>';
+    document.body.append(root);
+    const el = root.querySelector("span");
+    const block = (op, amount = 1, value = "") => ({ id: crypto.randomUUID(), op, amount, value, duration: 0, children: [], otherwise: [] });
+    const condition = block("if-width", 600);
+    condition.children.push(block("opacity", 75));
+    condition.otherwise.push(block("opacity", 25));
+    const blocks = [block("set-x", 100), block("move-y", 24), block("set-y", 18), block("move", 3), block("reset-transform"), block("move-y", 5), block("text-color", 1, "#336699"), block("radius", 12), block("blur", 2), condition, block("stop"), block("opacity", 10)];
+    const dispose = initLogic(root, [{ id: crypto.randomUUID(), page: "home", target: "element:runtime-target", name: "runtime", enabled: true, event: "load", key: "Enter", x: 0, y: 0, blocks }]);
+    await new Promise(requestAnimationFrame);
+    const actual = { translate: el.style.translate, color: el.style.color, radius: el.style.borderRadius, filter: el.style.filter, opacity: el.style.opacity };
+    dispose();
+    const restored = el.style.translate;
+    root.remove();
+    return { actual, restored };
+  });
+  assert.deepEqual(runtime.actual, { translate: "12px 13px", color: "rgb(51, 102, 153)", radius: "12px", filter: "blur(2px)", opacity: "0.75" });
+  assert.equal(runtime.restored, "12px 8px", "Runtime cleanup restores original transforms");
   await button("關閉積木視窗").click();
   await tab("圖像匯入").click();
   await label("積木匯入圖片").setInputFiles({
@@ -393,6 +483,26 @@ export async function studioRegression({
   await page.getByText("物件內容與外觀", { exact: true }).click();
   await label("積木圖片替代文字").fill("積木匯入圖像");
   await button("完成").click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await tab("物件圖層").click();
+  const touchSource = button("物件圖層 · 指定既有內容");
+  await touchSource.scrollIntoViewIfNeeded();
+  const touchBox = await touchSource.boundingBox();
+  const scrollBox = await page.locator(".scratch-scroll").boundingBox();
+  const touchCount = await page.locator(".scratch-stack").count();
+  const cdp = await page.context().newCDPSession(page);
+  const point = (x, y) => ({ x, y, id: 1 });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point(touchBox.x + 25, touchBox.y + 12)] });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [point(scrollBox.x + 15, scrollBox.y + 30)] });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await settleCanvas();
+  assert.equal(await page.locator(".scratch-stack").count(), touchCount + 1, "Touch dragging creates a script");
+  await page.screenshot({ path: "artifacts/scratch-mobile.png" });
+  await page.keyboard.press("Control+z");
+  await settleCanvas();
+  assert.equal(await page.locator(".scratch-stack").count(), touchCount);
+  await cdp.detach();
+  await page.setViewportSize({ width: 1440, height: 1080 });
   await label("切換模式").selectOption("layers");
   await page.locator(".editor-canvas").waitFor();
   await settleCanvas();

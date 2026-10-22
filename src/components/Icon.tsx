@@ -8,6 +8,15 @@ export function Icon({
   className?: string;
 }) {
   const paths: Record<string, React.ReactNode> = {
+    select: <path d="m5 3 14 9-7 1-3 7z" />,
+    move: <path d="M12 2v20M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3" />,
+    hand: <path d="M7 12V6a2 2 0 0 1 3 0V4a2 2 0 0 1 3 0v2a2 2 0 0 1 3 0v2a2 2 0 0 1 3 0v7c0 4-3 7-7 7-3 0-5-2-7-5l-2-4c-1-2 1-3 2-2l2 2" />,
+    "align-left": <path d="M4 3v18M8 7h12v4H8zM8 15h8v4H8z" />,
+    "align-center": <path d="M12 2v20M4 6h16v4H4zM7 14h10v4H7z" />,
+    "align-right": <path d="M20 3v18M4 7h12v4H4zM8 15h8v4H8z" />,
+    frame: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16M9 9v11" /></>,
+    text: <path d="M5 6V3h14v3M12 3v18M8 21h8" />,
+    save: <><path d="M4 3h13l4 4v14H3V3zM7 3v6h10V3" /><path d="M7 21v-8h10v8" /></>,
     arrow: (
       <>
         <path d="M5 12h14M13 6l6 6-6 6" />

@@ -30,6 +30,7 @@ import { PresentationPanel } from "./PresentationPanel";
 import { copyDefaults } from "../lib/presentation";
 import { WorkspacePanel } from "./WorkspacePanel";
 import { ScopedCode } from "./ScopedCode";
+import { useCanvasNavigation, isTextEntry, zoomLevels } from "./useCanvasNavigation";
 import { useFreeLayout } from "./useFreeLayout";
 import { selectedForPage } from "../lib/workspace";
 import { Icon } from "../components/Icon";
@@ -151,6 +152,7 @@ function Editor({
   const [device, setDevice] = useState("auto"),
     [zoom, setZoom] = useState(1),
     [snap, setSnap] = useState(true);
+  const [canvasWidth, setCanvasWidth] = useState(1280);
   const codeDirty = useRef(false);
   function discardCode() {
     if (!codeDirty.current) return true;
@@ -343,6 +345,13 @@ function Editor({
     edit(next);
     apply(next);
   }
+  useEffect(() => {
+    if (!view.current || blockMode) return;
+    const observer = new ResizeObserver(([entry]) => setCanvasWidth(entry.contentRect.width));
+    observer.observe(view.current);
+    return () => observer.disconnect();
+  }, [Boolean(content), blockMode]);
+  const navigationClick = useCanvasNavigation(view, Boolean(content && !preview && !blockMode), zoom, setZoom, tool === "pan");
   useFreeLayout(
     view,
     Boolean(content && !preview && !blockMode),
@@ -391,6 +400,7 @@ function Editor({
         deleteSelected();
         return;
       }
+      if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
       if (event.key.toLowerCase() === "v") setTool("select");
       if (event.key.toLowerCase() === "m") setTool("move");
       if (event.key.toLowerCase() === "h") setTool("pan");
@@ -578,11 +588,22 @@ function Editor({
         e.preventDefault();
         saveRef.current().catch(fail);
       }
-      if (e.key === "Escape" && !showPublish) closePanel();
+      if (!isTextEntry(e.target) && !e.isComposing && !preview && (e.ctrlKey || e.metaKey)) {
+        const key = e.key.toLowerCase();
+        if (key === "z" || key === "y") {
+          e.preventDefault();
+          if (!discardCode() || !current.current) return;
+          const forward = key === "y" || e.shiftKey;
+          const from = forward ? redo.current : undo.current;
+          const to = forward ? undo.current : redo.current;
+          if (from.length) { to.push(current.current); apply(from.pop()!, false); }
+        }
+      }
+      if (e.key === "Escape" && !showPublish && !isTextEntry(e.target) && !blockMode) closePanel();
     };
     window.addEventListener("keydown", keys);
     return () => window.removeEventListener("keydown", keys);
-  }, [showPublish]);
+  }, [showPublish, blockMode, preview]);
   async function exit() {
     if (!discardCode()) return;
     if (
@@ -925,6 +946,8 @@ function Editor({
           <button
             className="editor-small-button preview-toggle"
             aria-pressed={preview}
+            aria-label={preview ? "繼續編輯" : "預覽"}
+            title={preview ? "繼續編輯" : "預覽"}
             onClick={() => setPreview((p) => !p)}
           >
             <Icon name={preview ? "edit" : "eye"} size={15} />
@@ -933,6 +956,7 @@ function Editor({
           <button
             className="editor-small-button panel-toggle"
             aria-expanded={panelOpen}
+            aria-label="面板" title="面板"
             onClick={() => {
               if (panelOpen) closePanel();
               else setPanelOpen(true);
@@ -942,19 +966,18 @@ function Editor({
             <span>面板</span>
           </button>
           <button
-            className="editor-small-button save-button"
+            className="editor-small-button save-button" aria-label="儲存" title="儲存 Ctrl+S"
             onClick={() => saveRef.current().catch(fail)}
             disabled={saveState === "saving" || saveState === "saved"}
           >
-            儲存
+            <Icon name="save" size={17} />
           </button>
           <button
-            className="editor-publish"
+            className="editor-publish" aria-label="發布" title="發布"
             onClick={() => setShowPublish(true)}
             disabled={busy}
           >
-            發布
-            <Icon name="diagonal" size={13} />
+            <Icon name="upload" size={17} />
           </button>
           <button
             className="icon-button"
@@ -982,19 +1005,19 @@ function Editor({
           <div className="tool-group">
             {(
               [
-                ["select", "↖", "選取 V"],
-                ["move", "✥", "移動 M"],
-                ["pan", "✋", "平移 H"],
+                ["select", "select", "選取 V"],
+                ["move", "move", "移動 M"],
+                ["pan", "hand", "平移 H"],
               ] as const
             ).map(([value, symbol, label]) => (
               <button
                 key={value}
                 aria-label={label}
+                title={label}
                 aria-pressed={tool === value}
                 onClick={() => setTool(value)}
               >
-                <span>{symbol}</span>
-                {label}
+                <Icon name={symbol} size={18} />
               </button>
             ))}
           </div>
@@ -1003,6 +1026,7 @@ function Editor({
               <button
                 key={align}
                 aria-label={`物件${["靠左", "置中", "靠右"][i]}`}
+                title={`物件${["靠左", "置中", "靠右"][i]}`}
                 onClick={() => {
                   const key = selectionKey(selection, page),
                     el = view.current?.querySelector<HTMLElement>(
@@ -1040,12 +1064,13 @@ function Editor({
                   );
                 }}
               >
-                {["⇤", "↔", "⇥"][i]}
+                <Icon name={`align-${align}`} size={18} />
               </button>
             ))}
           </div>
-          <button onClick={() => insertRecipe("panel")}>＋ 面板</button>
-          <button onClick={() => insertRecipe("text")}>＋ 文字</button>
+          <button aria-label="＋ 面板" title="新增面板" onClick={() => insertRecipe("panel")}><Icon name="frame" size={18} /></button>
+          <button aria-label="＋ 文字" title="新增文字" onClick={() => insertRecipe("text")}><Icon name="text" size={18} /></button>
+          <span className="shortcut-hint" title="Alt＋滾輪縮放 · 空格／中鍵拖曳平移 · Ctrl＋Z 復原 · Ctrl＋Shift＋Z 重做">⌨</span>
           <label className="tool-snap">
             <input
               type="checkbox"
@@ -1074,7 +1099,7 @@ function Editor({
               value={zoom}
               onChange={(e) => setZoom(Number(e.target.value))}
             >
-              {[0.5, 0.75, 1, 1.25].map((z) => (
+              {[...new Set([...zoomLevels, zoom])].sort((a, b) => a - b).map((z) => (
                 <option key={z} value={z}>
                   {z * 100}%
                 </option>
@@ -1154,7 +1179,7 @@ function Editor({
         }}
         onClickCapture={(event) => {
           if (
-            suppressClick.current ||
+            suppressClick.current || navigationClick.current ||
             (event.target as Element).closest("[data-layer-resize]")
           ) {
             event.preventDefault();
@@ -1200,7 +1225,7 @@ function Editor({
       >
         <div
           className={`canvas-stage ${snap ? "show-grid" : ""}`}
-          style={{ width: device === "auto" ? "100%" : `${device}px`, zoom }}
+          style={{ width: device === "auto" ? `${canvasWidth}px` : `${device}px`, zoom }}
         >
           <MemoSiteRenderer
             content={deferredContent || content}

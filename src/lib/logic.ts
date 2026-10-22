@@ -19,6 +19,14 @@ export const logicCatalog: {
   hint: string;
 }[] = [
   { op: "move", category: "motion", label: "水平移動", hint: "以 px 移動物件" },
+  { op: "move-y", category: "motion", label: "垂直移動", hint: "以 px 上下移動物件" },
+  { op: "set-x", category: "motion", label: "水平位置設為", hint: "相對原始位置的 px 位移" },
+  { op: "set-y", category: "motion", label: "垂直位置設為", hint: "相對原始位置的 px 位移" },
+  { op: "reset-transform", category: "motion", label: "重設變形", hint: "回到腳本執行前的位置與大小" },
+  { op: "text-color", category: "looks", label: "文字顏色", hint: "設定六位文字色碼" },
+  { op: "radius", category: "looks", label: "圓角設為", hint: "0–500 px" },
+  { op: "blur", category: "looks", label: "模糊設為", hint: "0–40 px，0 為清晰" },
+  { op: "stop", category: "control", label: "停止此腳本", hint: "立即結束本次事件的後續積木" },
   { op: "rotate", category: "motion", label: "旋轉", hint: "以角度旋轉物件" },
   { op: "scale", category: "motion", label: "縮放至", hint: "100 = 原始大小" },
   { op: "opacity", category: "looks", label: "不透明度", hint: "0–100%" },
@@ -96,7 +104,7 @@ export function createLogicBlock(op: LogicOp): LogicBlock {
     id: crypto.randomUUID(),
     op,
     value:
-      op === "color"
+      ["color", "text-color"].includes(op)
         ? "#c7b8ed"
         : op === "animate"
           ? "fade"
@@ -104,7 +112,7 @@ export function createLogicBlock(op: LogicOp): LogicBlock {
             ? "次數"
             : op === "text"
               ? "新的文字"
-              : "",
+              : op === "link" ? "https://example.com" : "",
     amount:
       op === "scale" || op === "opacity"
         ? 100
@@ -112,7 +120,7 @@ export function createLogicBlock(op: LogicOp): LogicBlock {
           ? 3
           : op === "if-width"
             ? 768
-            : op === "move"
+            : ["move", "move-y"].includes(op)
               ? 24
               : 1,
     duration: 0.6,
@@ -142,6 +150,28 @@ export function extractLogicBlock(
       extractLogicBlock(b.children, id) || extractLogicBlock(b.otherwise, id);
     if (child) return child;
   }
+}
+/** Resolve the destination before extraction so same-list moves keep their order. */
+export function connectLogicBlock(
+  scripts: LogicScript[],
+  source: { op?: LogicOp; script?: string; block?: string },
+  destination: { script: string; parent: string | null; branch: "children" | "otherwise"; index: number },
+) {
+  const script = scripts.find((s) => s.id === destination.script);
+  if (!script) return;
+  const list = destination.parent
+    ? findLogicBlock(script.blocks, destination.parent)?.[destination.branch]
+    : script.blocks;
+  if (!list) return;
+  const origin = scripts.find((s) => s.id === source.script);
+  const moving = origin && source.block ? findLogicBlock(origin.blocks, source.block) : undefined;
+  if (moving && destination.parent && findLogicBlock([moving], destination.parent))
+    throw new Error("無法將積木放入自己的內部");
+  const oldIndex = list.findIndex((b) => b.id === source.block);
+  const index = oldIndex >= 0 && oldIndex < destination.index ? destination.index - 1 : destination.index;
+  const block = source.op ? createLogicBlock(source.op)
+    : origin && source.block ? extractLogicBlock(origin.blocks, source.block) : undefined;
+  if (block) list.splice(Math.min(Math.max(0, index), list.length), 0, block);
 }
 export function duplicateLogicScript(script: LogicScript): LogicScript {
   const next = structuredClone(script);

@@ -334,9 +334,7 @@
 .layer-studio .canvas-stage {
   margin: auto;
 }
-.layer-studio .editor-canvas .site {
-  padding-bottom: 40px;
-}
+
 /* Independent Scratch-style workspace: no layer inspector or drawing toolbar. */
 .scratch-studio {
   height: 100%;
@@ -552,15 +550,27 @@
   max-width: 130px;
 }
 .logic-drop-slot {
-  height: 12px;
-  margin: 0 5px;
-  border: 1px dashed #8da9cb22;
-  border-radius: 4px;
-  transition: background 0.15s;
+  position: relative;
+  height: 2px;
+  margin-bottom: -2px;
+  z-index: 2;
 }
 .logic-drop-slot.active {
-  height: 25px;
-  border-color: #a6cdff;
+  background: #a6cdff;
+  box-shadow: 0 0 8px #328bff;
+}
+.logic-drop-slot::after {
+  content: "";
+  position: absolute;
+  inset: -6px 0;
+}
+.logic-drop-slot[data-empty="true"] {
+  height: 24px;
+  margin-bottom: 0;
+  border: 1px dashed #8da9cb55;
+  border-radius: 4px;
+}
+.logic-drop-slot[data-empty="true"].active {
   background: #328bff40;
 }
 .logic-branch {
@@ -893,3 +903,48 @@
     max-width: 120px;
   }
 }
+/* Compact tool icons retain accessible names and native hover/focus tooltips. */
+.editor-top-actions .editor-small-button > span { display: none; }
+.editor-top-actions .editor-small-button, .editor-top-actions .editor-publish { min-width: 32px; display: inline-flex; justify-content: center; align-items: center; padding: 7px; }
+.editor-toolstrip button { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; flex-shrink: 0; }
+.shortcut-hint { color: #a9bad2; cursor: help; }
+.editor-canvas, .scratch-scroll { scroll-behavior: auto; }
+.editor-canvas.space-pan, .scratch-scroll.space-pan { cursor: grab; }
+.editor-canvas.space-pan *, .scratch-scroll.space-pan * { cursor: inherit !important; }
+.editor-canvas.is-panning, .scratch-scroll.is-panning { cursor: grabbing; user-select: none; }
+.scratch-block.selected, .scratch-stack[data-selected="true"] > .scratch-object { outline: 2px solid #82bcff; outline-offset: 1px; }
+.logic-block-unit { position: relative; }
+.scratch-event { border-radius: 4px; }
+.scratch-block { border-radius: 4px; }
+.logic-mini-preview { border-bottom: 1px solid #c1d5f22a; flex-shrink: 0; padding: 10px; }
+.mini-preview-heading { display: flex; justify-content: space-between; align-items: center; }
+.mini-preview-heading button { padding: 5px; font-size: 11px; }
+.mini-preview-controls { display: flex; align-items: center; gap: 6px; margin-block: 6px; font-size: 10px; }
+.mini-preview-controls select { padding: 3px; border-radius: 4px; background: #0f1622; color: #d5e0ef; border: 1px solid #ffffff25; }
+.mini-preview-controls input { min-width: 35px; flex: 1; width: 70px; accent-color: #8abaff; }
+.mini-preview-viewport { height: 185px; overflow: auto; background: #080a0f; border: 1px solid #ffffff20; border-radius: 5px; }
+.mini-preview-viewport > div { position: relative; }
+.mini-preview-viewport iframe { position: absolute; top: 0; left: 0; }
+.scratch-library-title { padding-block: 14px 10px; }
+.logic-categories { padding-bottom: 10px; }
+.scratch-library { min-height: 0; }
+@media (max-width: 600px) {
+  .scratch-workspace { right: 0; bottom: 40%; }
+  .scratch-library { top: 60%; width: 100%; border-top: 1px solid #ffffff25; }
+  .scratch-library-title, .scratch-library > .panel-resizer { display: none; }
+  .scratch-library .logic-categories { display: flex; overflow-x: auto; flex-shrink: 0; padding: 5px; }
+  .logic-categories button { white-space: nowrap; flex-shrink: 0; }
+  .logic-library-content { padding: 10px; }
+  .library-scratch-block { display: inline-block; width: auto; min-width: 145px; margin: 0 8px 10px 0; }
+  .logic-mini-preview { position: absolute; right: 6px; bottom: calc(100% + 44px); width: min(190px, 48vw); padding: 5px; background: #111b29ed; border: 1px solid #ffffff25; border-radius: 6px; z-index: 5; }
+  .mini-preview-viewport { height: 105px; }
+  .mini-preview-heading button { font-size: 9px; padding: 3px; }
+  .scratch-workspace-tools { flex-shrink: 0; }
+  .scratch-topbar > div { flex-shrink: 0; }
+  .layer-studio .editor-topbar { gap: 5px; padding-inline: 6px; }
+  .editor-top-actions { gap: 2px; }
+  .editor-top-actions button { flex-shrink: 0; }
+  .editor-title { display: none; }
+}
+[data-logic-payload] { touch-action: none; }
+.logic-touch-ghost { position: fixed; z-index: 2000; pointer-events: none; padding: 12px 16px; max-width: 240px; border: 1px solid #9fc7ff; border-radius: 6px; background: #193656ee; color: #e6f1ff; font: 12px/1.5 sans-serif; box-shadow: 0 8px 30px #0006; }

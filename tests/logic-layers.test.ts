@@ -6,9 +6,36 @@ import {
   createLogicBlock,
   extractLogicBlock,
   findLogicBlock,
+  connectLogicBlock,
+  logicCatalog,
 } from "../src/lib/logic.ts";
 import { createCanvasNode } from "../src/lib/workspace.ts";
 import { patchLayer, removeLayer, reorderLayer } from "../src/lib/layers.ts";
+
+test("magnetic connections preserve same-list order, cross-branch moves and reject cycles atomically", () => {
+  const a = createLogicBlock("move"), b = createLogicBlock("move-y"), c = createLogicBlock("repeat");
+  const script = { id: crypto.randomUUID(), page: "home" as const, name: "test", target: "hero", event: "click" as const, key: "Enter", enabled: true, x: 0, y: 0, blocks: [a, b, c] };
+  connectLogicBlock([script], { script: script.id, block: a.id }, { script: script.id, parent: null, branch: "children", index: 3 });
+  assert.deepEqual(script.blocks.map((b) => b.id), [b.id, c.id, a.id]);
+  connectLogicBlock([script], { script: script.id, block: a.id }, { script: script.id, parent: c.id, branch: "children", index: 0 });
+  assert.equal(c.children[0].id, a.id);
+  const nested = createLogicBlock("repeat"); c.children.push(nested);
+  const before = JSON.stringify(script);
+  assert.throws(() => connectLogicBlock([script], { script: script.id, block: c.id }, { script: script.id, parent: nested.id, branch: "children", index: 0 }));
+  assert.equal(JSON.stringify(script), before);
+  connectLogicBlock([script], { script: script.id, block: a.id }, { script: script.id, parent: c.id, branch: "otherwise", index: 0 });
+  assert.equal(c.otherwise[0].id, a.id);
+});
+
+test("all palette operations validate and text colors reject injected styles", () => {
+  const content = structuredClone(initialContent);
+  const blocks = logicCatalog.map(({ op }) => createLogicBlock(op));
+  blocks.find((b) => b.op === "link")!.value = "https://example.com";
+  content.workspace = { nodes: [], scripts: [{ id: crypto.randomUUID(), page: "home", name: "palette", target: "hero", event: "click", key: "Enter", enabled: true, x: 0, y: 0, blocks }] };
+  assert.ok(contentSchema.safeParse(content).success);
+  blocks.find((b) => b.op === "text-color")!.value = "red;position:fixed";
+  assert.equal(contentSchema.safeParse(content).success, false);
+});
 test("original layers delete reversibly without mutating source content; locked layers resist deletion", () => {
   const content = structuredClone(initialContent),
     title = content.about.title;

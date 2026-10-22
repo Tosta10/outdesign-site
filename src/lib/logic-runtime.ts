@@ -92,7 +92,7 @@ export function initLogic(
         }
         remember(el);
         if (
-          ["move", "rotate", "scale", "animate"].includes(b.op) &&
+          ["move", "move-y", "set-x", "set-y", "rotate", "scale", "animate"].includes(b.op) &&
           !transformable.has(el)
         ) {
           // CSS transforms do not affect non-replaced inline text boxes.
@@ -101,6 +101,7 @@ export function initLogic(
           transformable.add(el);
         }
         const amount = Number.isFinite(b.amount) ? b.amount : 0;
+        if (b.op === "stop") { controller.abort(); return; }
         if (b.op === "wait") {
           await pause(b.duration, signal);
           continue;
@@ -119,7 +120,7 @@ export function initLogic(
         if (b.op === "if-width" || b.op === "if-variable") {
           const pass =
             b.op === "if-width"
-              ? (el.ownerDocument.defaultView?.innerWidth || innerWidth) <
+              ? (root.querySelector<HTMLElement>(".site")?.clientWidth || el.ownerDocument.defaultView?.innerWidth || innerWidth) <
                 amount
               : (variables.get(b.value) || 0) >= amount;
           await execute(pass ? b.children : b.otherwise, depth + 1);
@@ -134,11 +135,22 @@ export function initLogic(
               Math.min(1e6, (variables.get(b.value) || 0) + amount),
             ),
           );
-        else if (b.op === "move") {
+        else if (["move", "move-y", "set-x", "set-y"].includes(b.op)) {
           const value = motionFor(el);
-          value.x = Math.max(-3000, Math.min(3000, value.x + amount));
+          const axis = b.op === "move-y" || b.op === "set-y" ? "y" : "x";
+          value[axis] = Math.max(-3000, Math.min(3000, (b.op.startsWith("set-") ? 0 : value[axis]) + amount));
           el.style.translate = `${value.x}px ${value.y}px`;
-        } else if (b.op === "rotate") {
+        } else if (b.op === "reset-transform") {
+          const original = document.createElement("div");
+          original.setAttribute("style", styles.get(el) || "");
+          for (const property of ["translate", "rotate", "scale", "display"])
+            el.style.setProperty(property, original.style.getPropertyValue(property));
+          motion.delete(el);
+          transformable.delete(el);
+        } else if (b.op === "radius") el.style.borderRadius = `${Math.max(0, Math.min(500, amount))}px`;
+        else if (b.op === "blur") el.style.filter = `blur(${Math.max(0, Math.min(40, amount))}px)`;
+        else if (b.op === "text-color" && /^#[0-9a-f]{6}$/i.test(b.value)) el.style.color = b.value;
+        else if (b.op === "rotate") {
           const value = motionFor(el);
           value.angle = Math.max(-36000, Math.min(36000, value.angle + amount));
           el.style.rotate = `${value.angle}deg`;

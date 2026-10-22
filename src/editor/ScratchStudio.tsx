@@ -1,5 +1,6 @@
 import {
   memo,
+  useDeferredValue,
   useEffect,
   useId,
   useRef,
@@ -18,6 +19,7 @@ import {
   logicCatalog,
   eventLabels,
   createLogicBlock,
+  connectLogicBlock,
   findLogicBlock,
   extractLogicBlock,
   duplicateLogicScript,
@@ -25,6 +27,7 @@ import {
   type LogicOp,
 } from "../lib/logic";
 import { collectLayers, type LayerItem } from "../lib/layers";
+import { instantiateAssembly } from "../lib/assemblies";
 import { createCanvasNode } from "../lib/workspace";
 import {
   SiteRenderer,
@@ -34,6 +37,8 @@ import {
 import { initViewer } from "../lib/viewer";
 import { PanelResizer } from "./ResizablePanels";
 import { LogicObjectProperties } from "./LogicObjectProperties";
+import { MiniPreview } from "./MiniPreview";
+import { useCanvasNavigation, isTextEntry, zoomLevels } from "./useCanvasNavigation";
 const mime = "application/outdesign-logic";
 type Payload = {
   op?: LogicOp;
@@ -41,6 +46,7 @@ type Payload = {
   block?: string;
   event?: LogicScript["event"];
   object?: string;
+  preset?: string;
 };
 type Props = {
   content: SiteContent;
@@ -152,8 +158,12 @@ export default function ScratchStudio(props: Props) {
     [message, setMessage] = useState(""),
     [zoom, setZoom] = useState(1),
     [uploading, setUploading] = useState(false);
+  const deferredContent = useDeferredValue(content);
+  const [selected, setSelected] = useState<{ script: string; block?: string } | null>(null);
   const inventory = useRef<HTMLDivElement>(null),
     workspace = useRef<HTMLDivElement>(null);
+  useCanvasNavigation(workspace, !editing && !preview, zoom, setZoom);
+  const touchDrag = useRef<{ payload: Payload; x: number; y: number; ghost: HTMLElement; id: number; moved: boolean } | null>(null);
   const drag = useRef<{
     id: string;
     x: number;
@@ -164,6 +174,7 @@ export default function ScratchStudio(props: Props) {
     dx: number;
     dy: number;
   } | null>(null);
+  useEffect(() => () => { touchDrag.current?.ghost.remove(); }, []);
   useEffect(() => {
     if (inventory.current) setLayers(collectLayers(content, inventory.current));
   }, [content, page]);
@@ -251,20 +262,7 @@ export default function ScratchStudio(props: Props) {
         script.event = p.event;
         return;
       }
-      if (p.block === parentId) return;
-      let block: LogicBlock | undefined;
-      if (p.op) block = createLogicBlock(p.op);
-      else if (p.block && p.script) {
-        const source = next.workspace?.scripts?.find((s) => s.id === p.script);
-        if (source) block = extractLogicBlock(source.blocks, p.block);
-      }
-      if (!block) return;
-      const list = parentId
-        ? findLogicBlock(script.blocks, parentId)?.[branch]
-        : script.blocks;
-      // Moving a container into its descendant is discarded by leaving the draft unchanged.
-      if (!list) throw new Error("無法將積木放入自己的內部");
-      list.splice(Math.min(index, list.length), 0, block);
+      connectLogicBlock(next.workspace?.scripts || [], p, { script: scriptId, parent: parentId, branch, index });
     });
   };
   const slot = (
@@ -276,6 +274,8 @@ export default function ScratchStudio(props: Props) {
     <div
       key={`slot-${parent}-${branch}-${index}`}
       className="logic-drop-slot"
+      data-empty={(parent ? findLogicBlock(s.blocks, parent)?.[branch] : s.blocks)?.length === 0}
+      data-script={s.id} data-parent={parent || ""} data-branch={branch} data-index={index}
       role="group"
       aria-label="積木連接位置"
       onDragOver={(e) => {
@@ -296,6 +296,18 @@ export default function ScratchStudio(props: Props) {
       }}
     />
   );
+  const magneticSlot = (e: { currentTarget: HTMLElement; clientX: number; clientY: number }) => {
+    const slots = [...e.currentTarget.querySelectorAll<HTMLElement>(".logic-drop-slot")];
+    let closest: HTMLElement | null = null;
+    let best = Infinity;
+    for (const el of slots) {
+      const rect = el.getBoundingClientRect();
+      if (e.clientX < rect.left - 12 || e.clientX > rect.right + 12) continue;
+      const distance = Math.abs(e.clientY - (rect.top + rect.height / 2));
+      if (distance < 30 * zoom && distance < best) { best = distance; closest = el; }
+    }
+    return closest;
+  };
   const renderBlocks = (
     s: LogicScript,
     blocks: LogicBlock[],
@@ -308,15 +320,18 @@ export default function ScratchStudio(props: Props) {
         const def = logicCatalog.find((d) => d.op === b.op)!,
           cat = logicCategories.find((c) => c.id === def.category)!;
         return (
-          <div key={b.id} className="logic-block-unit">
+          <div key={b.id} className="logic-block-unit" data-block-id={b.id}>
             <div
-              className={`scratch-block category-${def.category} ${isContainer(b.op) ? "c-block" : ""}`}
+              className={`scratch-block ${selected?.block === b.id ? "selected" : ""} category-${def.category} ${isContainer(b.op) ? "c-block" : ""}`}
               style={{ "--block-color": cat.color } as CSSProperties}
               draggable
+              data-logic-payload={JSON.stringify({ script: s.id, block: b.id })}
               onDragStart={(e) => {
                 e.stopPropagation();
                 startPayload(e, { script: s.id, block: b.id });
               }}
+              onClick={() => setSelected({ script: s.id, block: b.id })}
+              onFocus={() => setSelected({ script: s.id, block: b.id })}
               onDoubleClick={() => setEditing({ script: s.id, block: b.id })}
               tabIndex={0}
               role="group"
@@ -330,7 +345,8 @@ export default function ScratchStudio(props: Props) {
               <span className="block-value">
                 {b.op.includes("variable")
                   ? `${b.value} ${b.op === "if-variable" ? "≥" : b.op === "add-variable" ? "+" : "="} ${b.amount}`
-                  : ["color", "text", "animate", "link"].includes(b.op)
+                  : ["stop", "reset-transform"].includes(b.op) ? ""
+                  : ["color", "text-color", "text", "animate", "link"].includes(b.op)
                     ? b.value.slice(0, 30)
                     : b.op === "wait"
                       ? `${b.duration} 秒`
@@ -383,9 +399,106 @@ export default function ScratchStudio(props: Props) {
         Object.assign(findLogicBlock(s.blocks, editBlock.id)!, patch),
       );
   };
+  useEffect(() => {
+    const keys = (e: KeyboardEvent) => {
+      if (editing || preview || isTextEntry(e.target) || e.isComposing) return;
+      if (e.key === "Escape") { setSelected(null); return; }
+      if (!selected) return;
+      if (["Delete", "Backspace"].includes(e.key)) {
+        e.preventDefault();
+        candidateChange((next) => {
+          const script = next.workspace?.scripts?.find((s) => s.id === selected.script);
+          if (!script) return;
+          if (selected.block) extractLogicBlock(script.blocks, selected.block);
+          else next.workspace!.scripts = next.workspace!.scripts!.filter((s) => s.id !== selected.script);
+        });
+        setSelected(null);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        candidateChange((next) => {
+          const script = next.workspace?.scripts?.find((s) => s.id === selected.script);
+          if (!script) return;
+          const copy = duplicateLogicScript(script);
+          if (selected.block) {
+            // IDs have been regenerated; preserve tree position through a recursive source walk.
+            const duplicateAt = (source: LogicBlock[], copies: LogicBlock[]): boolean => {
+              for (let i = 0; i < source.length; i++) {
+                if (source[i].id === selected.block) { source.splice(i + 1, 0, copies[i]); return true; }
+                if (duplicateAt(source[i].children, copies[i].children) || duplicateAt(source[i].otherwise, copies[i].otherwise)) return true;
+              }
+              return false;
+            };
+            duplicateAt(script.blocks, copy.blocks);
+          } else next.workspace!.scripts!.push(copy);
+        });
+      }
+      if (!selected.block && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        e.preventDefault();
+        modifyScript(selected.script, (s) => {
+          const step = e.shiftKey ? 10 : 1;
+          s.x = Math.max(0, Math.min(4000, s.x + (e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0)));
+          s.y = Math.max(0, Math.min(4000, s.y + (e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0)));
+        });
+      }
+    };
+    window.addEventListener("keydown", keys);
+    return () => window.removeEventListener("keydown", keys);
+  }, [content, selected, editing, preview]);
   const selectedCategory = logicCategories.find((c) => c.id === category)!;
   return (
-    <div className="scratch-studio">
+    <div className="scratch-studio"
+      onPointerDownCapture={(e) => {
+        if (e.pointerType === "mouse" || e.button !== 0) return;
+        if ((e.target as Element).closest(".scratch-block button")) return;
+        const source = (e.target as Element).closest<HTMLElement>("[data-logic-payload]");
+        if (!source) return;
+        e.preventDefault(); e.stopPropagation();
+        const ghost = document.createElement("div");
+        ghost.className = "logic-touch-ghost";
+        ghost.textContent = source.textContent?.slice(0, 45) || "積木";
+        ghost.style.left = `${e.clientX + 12}px`; ghost.style.top = `${e.clientY + 12}px`;
+        document.body.append(ghost);
+        touchDrag.current = { payload: JSON.parse(source.dataset.logicPayload!), x: e.clientX, y: e.clientY, ghost, id: e.pointerId, moved: false };
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }}
+      onPointerMoveCapture={(e) => {
+        const d = touchDrag.current;
+        if (!d || d.id !== e.pointerId) return;
+        e.preventDefault(); e.stopPropagation();
+        d.moved ||= Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 8;
+        d.ghost.style.left = `${e.clientX + 12}px`; d.ghost.style.top = `${e.clientY + 12}px`;
+        document.querySelectorAll(".logic-drop-slot.active").forEach((el) => el.classList.remove("active"));
+        const stack = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>(".scratch-stack");
+        if (stack) magneticSlot({ currentTarget: stack, clientX: e.clientX, clientY: e.clientY })?.classList.add("active");
+      }}
+      onPointerUpCapture={(e) => {
+        const d = touchDrag.current;
+        if (!d || d.id !== e.pointerId) return;
+        e.preventDefault(); e.stopPropagation();
+        touchDrag.current = null; d.ghost.remove();
+        document.querySelectorAll(".logic-drop-slot.active").forEach((el) => el.classList.remove("active"));
+        if (!d.moved) { setMessage("拖曳積木至工作區連接位置。"); return; }
+        const hit = document.elementFromPoint(e.clientX, e.clientY);
+        const stack = hit?.closest<HTMLElement>(".scratch-stack");
+        const slot = stack && magneticSlot({ currentTarget: stack, clientX: e.clientX, clientY: e.clientY });
+        try {
+          if (stack && d.payload.event) modifyScript(stack.dataset.scriptId!, (s) => { s.event = d.payload.event!; });
+          else if (stack && slot) candidateChange((next) => connectLogicBlock(next.workspace?.scripts || [], d.payload, { script: stack.dataset.scriptId!, parent: slot.dataset.parent || null, branch: slot.dataset.branch as "children" | "otherwise", index: Number(slot.dataset.index) }));
+          else if (hit?.closest(".scratch-scroll") && d.payload.object && workspace.current) {
+            const rect = workspace.current.getBoundingClientRect();
+            addScript((e.clientX - rect.left + workspace.current.scrollLeft) / zoom, (e.clientY - rect.top + workspace.current.scrollTop) / zoom, target, d.payload.object === "existing" ? undefined : d.payload.object as "frame");
+          } else if (hit?.closest(".scratch-scroll") && d.payload.preset) {
+            const preset = content.workspace?.presets?.find((p) => p.id === d.payload.preset);
+            if (preset) candidateChange((next) => next.workspace!.nodes.push(...instantiateAssembly(preset, page, null)));
+          } else setMessage("請將積木拖近腳本上緣或下緣連接。");
+        } catch (error) { setMessage((error as Error).message); }
+      }}
+      onPointerCancelCapture={() => {
+        touchDrag.current?.ghost.remove(); touchDrag.current = null;
+        document.querySelectorAll(".logic-drop-slot.active").forEach((el) => el.classList.remove("active"));
+      }}
+      onDragEnd={() => document.querySelectorAll(".logic-drop-slot.active").forEach((el) => el.classList.remove("active"))}>
       <header className="scratch-topbar">
         <div>
           <span className="eyebrow">OUTDESIGN / LOGIC STUDIO</span>
@@ -448,7 +561,7 @@ export default function ScratchStudio(props: Props) {
               value={zoom}
               onChange={(e) => setZoom(Number(e.target.value))}
             >
-              {[0.5, 0.75, 1, 1.25].map((z) => (
+              {[...new Set([...zoomLevels, zoom])].sort((a, b) => a - b).map((z) => (
                 <option key={z} value={z}>
                   {z * 100}%
                 </option>
@@ -480,7 +593,10 @@ export default function ScratchStudio(props: Props) {
             const x =
                 (e.clientX - rect.left + e.currentTarget.scrollLeft) / zoom,
               y = (e.clientY - rect.top + e.currentTarget.scrollTop) / zoom;
-            if (p.object)
+            if (p.preset) {
+              const preset = content.workspace?.presets?.find((a) => a.id === p.preset);
+              if (preset) candidateChange((next) => { next.workspace!.nodes.push(...instantiateAssembly(preset, page, null)); });
+            } else if (p.object)
               addScript(
                 x,
                 y,
@@ -508,13 +624,33 @@ export default function ScratchStudio(props: Props) {
                 key={s.id}
                 className={`scratch-stack ${s.enabled ? "" : "disabled"}`}
                 style={{ left: s.x, top: s.y }}
+                data-selected={selected?.script === s.id && !selected.block}
                 data-script-id={s.id}
+                onDragOver={(e) => {
+                  if (!e.dataTransfer.types.includes(mime)) return;
+                  e.preventDefault(); e.stopPropagation();
+                  document.querySelectorAll(".logic-drop-slot.active").forEach((el) => el.classList.remove("active"));
+                  magneticSlot(e)?.classList.add("active");
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+                    e.currentTarget.querySelectorAll(".active").forEach((el) => el.classList.remove("active"));
+                }}
+                onDrop={(e) => {
+                  const el = magneticSlot(e);
+                  e.currentTarget.querySelectorAll(".active").forEach((el) => el.classList.remove("active"));
+                  if (!el) { e.preventDefault(); e.stopPropagation(); setMessage("請靠近積木上緣或下緣連接。"); return; }
+                  try { insert(e, s.id, el.dataset.parent || null, el.dataset.branch as "children" | "otherwise", Number(el.dataset.index)); }
+                  catch (error) { setMessage((error as Error).message); }
+                }}
               >
                 <div
                   className="scratch-object"
                   tabIndex={0}
                   role="group"
                   aria-label={`編輯物件腳本：${s.name}`}
+                  onClick={() => setSelected({ script: s.id })}
+                  onFocus={() => setSelected({ script: s.id })}
                   onDoubleClick={() => setEditing({ script: s.id })}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") setEditing({ script: s.id });
@@ -596,11 +732,12 @@ export default function ScratchStudio(props: Props) {
         <div className="scratch-status" role="status">
           {props.error ||
             message ||
-            "拖曳積木至連接槽 · 雙擊編輯屬性 · 拖曳紫色物件標頭移動腳本"}
+            "Alt＋滾輪縮放 · 空格拖曳平移 · Ctrl＋Z 復原 · Ctrl＋D 複製 · Delete 刪除 · 雙擊屬性"}
         </div>
       </section>
       <aside className="scratch-library" aria-label="邏輯積木庫">
         <PanelResizer side="logic" />
+        <MiniPreview content={deferredContent} page={page} api={props.api} base={props.base} assets={props.assets} onRun={() => setPreview(true)} />
         <div className="scratch-library-title">
           <p className="eyebrow">BLOCK LIBRARY</p>
           <h2>把邏輯組起來</h2>
@@ -656,15 +793,9 @@ export default function ScratchStudio(props: Props) {
                     { "--block-color": selectedCategory.color } as CSSProperties
                   }
                   draggable
+                  data-logic-payload={JSON.stringify({ object })}
                   onDragStart={(e) => startPayload(e, { object })}
-                  onClick={() =>
-                    addScript(
-                      40 + (scripts.length % 3) * 350,
-                      50 + Math.floor(scripts.length / 3) * 150,
-                      target,
-                      object === "existing" ? undefined : object,
-                    )
-                  }
+                  onClick={() => setMessage("拖曳此物件至工作區；鍵盤可使用上方「＋ 物件腳本」。")}
                 >
                   {label}
                 </button>
@@ -673,16 +804,10 @@ export default function ScratchStudio(props: Props) {
                 <div className="saved-assembly-row" key={p.id}>
                   <button
                     className="library-scratch-block"
-                    onClick={async () => {
-                      const { instantiateAssembly } = await import(
-                        "../lib/assemblies"
-                      );
-                      candidateChange((next) =>
-                        next.workspace!.nodes.push(
-                          ...instantiateAssembly(p, page, null),
-                        ),
-                      );
-                    }}
+                    draggable
+                    data-logic-payload={JSON.stringify({ preset: p.id })}
+                    onDragStart={(e) => startPayload(e, { preset: p.id })}
+                    onClick={() => setMessage("拖曳組裝至工作區。")}
                   >
                     組裝 · {p.name}
                   </button>
@@ -728,8 +853,9 @@ export default function ScratchStudio(props: Props) {
               <button
                 className="library-scratch-block"
                 draggable
+                data-logic-payload={JSON.stringify({ object: "image" })}
                 onDragStart={(e) => startPayload(e, { object: "image" })}
-                onClick={() => addScript(40, 50, target, "image")}
+                onClick={() => setMessage("拖曳圖片積木至工作區。")}
               >
                 圖像匯入 · 圖片網址
               </button>
@@ -744,6 +870,7 @@ export default function ScratchStudio(props: Props) {
                   { "--block-color": selectedCategory.color } as CSSProperties
                 }
                 draggable
+                data-logic-payload={JSON.stringify({ event })}
                 onDragStart={(e) =>
                   startPayload(e, { event: event as LogicScript["event"] })
                 }
@@ -762,15 +889,13 @@ export default function ScratchStudio(props: Props) {
                   { "--block-color": selectedCategory.color } as CSSProperties
                 }
                 draggable
+                data-logic-payload={JSON.stringify({ op: b.op })}
                 onDragStart={(e) => startPayload(e, { op: b.op })}
-                onClick={() => {
-                  if (!scripts.length) {
-                    setMessage("先建立物件腳本，再拖入動作。");
-                    return;
-                  }
-                  modifyScript(scripts.at(-1)!.id, (s) =>
-                    s.blocks.push(createLogicBlock(b.op)),
-                  );
+                onClick={() => setMessage("拖曳此積木至腳本連接處。鍵盤可選取腳本後，聚焦積木並按 Enter 插入。")}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" || !selected) return;
+                  e.preventDefault();
+                  modifyScript(selected.script, (script) => script.blocks.push(createLogicBlock(b.op)));
                 }}
               >
                 {b.label}
@@ -808,6 +933,7 @@ export default function ScratchStudio(props: Props) {
                   "text",
                   "link",
                   "color",
+                  "text-color",
                   "set-variable",
                   "add-variable",
                   "if-variable",
@@ -815,12 +941,12 @@ export default function ScratchStudio(props: Props) {
                   <label>
                     {editBlock.op.includes("variable")
                       ? "變數名稱"
-                      : editBlock.op === "color"
+                      : ["color", "text-color"].includes(editBlock.op)
                         ? "色碼"
                         : "文字或連結"}
                     <input
                       aria-label="積木文字參數"
-                      type={editBlock.op === "color" ? "color" : "text"}
+                      type={["color", "text-color"].includes(editBlock.op) ? "color" : "text"}
                       value={editBlock.value}
                       onChange={(e) => changeBlock({ value: e.target.value })}
                     />
@@ -844,12 +970,15 @@ export default function ScratchStudio(props: Props) {
                 {![
                   "text",
                   "color",
+                  "text-color",
                   "show",
                   "hide",
                   "toggle",
                   "link",
                   "wait",
                   "animate",
+                  "reset-transform",
+                  "stop",
                 ].includes(editBlock.op) && (
                   <label>
                     數值
