@@ -150,10 +150,18 @@ export async function workLabRegression({ page, api, origin }) {
   await root.locator('[data-lab-setting="sound"]').check();
   await root.locator('[data-lab-setting="ambient"]').check();
   await root.getByRole("button", { name: "關閉展示設定", exact: true }).click();
+  // Test skip handlers in one event task; a slow GPU may finish a short boot
+  // while Playwright waits for actionability between two protocol calls.
+  await root.evaluate((element) => {
+    element.querySelector('[data-lab-action="replay"]').click();
+    if (element.querySelector(".lab-boot").hidden)
+      throw new Error("Boot did not open");
+    element.querySelector('[data-lab-action="skip"]').click();
+    if (!element.querySelector(".lab-boot").hidden)
+      throw new Error("Skip did not close boot");
+  });
   await root.getByRole("button", { name: "重播開場", exact: true }).click();
-  await root.locator(".lab-boot").waitFor({ state: "visible" });
-  await root.getByRole("button", { name: "略過開場 ↗", exact: true }).click();
-  await root.locator(".lab-boot").waitFor({ state: "hidden" });
+  await root.locator(".lab-boot").waitFor({ state: "hidden", timeout: 15000 });
   await root.locator('[data-lab-action="back"]').click();
   await stage.focus();
   await page.keyboard.press("ArrowDown");

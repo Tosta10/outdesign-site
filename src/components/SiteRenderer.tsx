@@ -267,18 +267,24 @@ export function SiteRenderer({
                     <span>{text("featured.meta")}</span>
                   </div>
                   <div className="featured-body">
-                    <img
-                      {...elementProps(
-                        c,
-                        `field-projects-${first.id}-image`,
-                        editing,
-                      )}
-                      src={img(first.image)}
-                      alt={first.alt}
-                      width="340"
-                      height="220"
-                      loading="lazy"
-                    />
+                    {first.image ? (
+                      <img
+                        {...elementProps(
+                          c,
+                          `field-projects-${first.id}-image`,
+                          editing,
+                        )}
+                        src={img(first.image)}
+                        alt={first.alt}
+                        width="340"
+                        height="220"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="lab-feature-symbol" aria-hidden="true">
+                        ◈
+                      </div>
+                    )}
                     <div>
                       <h2>{value(`projects.${first.id}.title`)}</h2>
                       <p>{value(`projects.${first.id}.description`)}</p>
@@ -289,7 +295,33 @@ export function SiteRenderer({
                   </div>
                 </a>
               )}
-              {!first && <a className="featured-card glass-surface" data-page-target="work" href={url("work")} {...elementProps(c, "work-observatory", editing)}><div className="card-meta"><span>02 <i /></span><span>INTERACTIVE STUDY</span></div><div className="featured-body"><div className="lab-feature-symbol" aria-hidden="true">◈</div><div><h2>物件研究室</h2><p>讓想法，有了形狀。探索即時生成的結構、光線與運動。</p><span className="text-link">進入作品 <Icon name="arrow" size={14}/></span></div></div></a>}
+              {!first && (
+                <a
+                  className="featured-card glass-surface"
+                  data-page-target="work"
+                  href={url("work")}
+                  {...elementProps(c, "work-observatory", editing)}
+                >
+                  <div className="card-meta">
+                    <span>
+                      02 <i />
+                    </span>
+                    <span>INTERACTIVE STUDY</span>
+                  </div>
+                  <div className="featured-body">
+                    <div className="lab-feature-symbol" aria-hidden="true">
+                      ◈
+                    </div>
+                    <div>
+                      <h2>物件研究室</h2>
+                      <p>讓想法，有了形狀。探索即時生成的結構、光線與運動。</p>
+                      <span className="text-link">
+                        進入作品 <Icon name="arrow" size={14} />
+                      </span>
+                    </div>
+                  </div>
+                </a>
+              )}
               <div
                 className="hero-bottom"
                 {...elementProps(c, "hero-bottom", editing)}
