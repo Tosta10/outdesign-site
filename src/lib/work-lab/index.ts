@@ -80,6 +80,7 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
     zoom: 1,
     highlight: -1,
     wave: performance.now(),
+    waveDirection: { lane: 0, row: 1 },
     preferences: configuredPreferences(baseConfig, stored),
   };
   const initialPreferences = structuredClone(state.preferences);
@@ -403,6 +404,7 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
       ? "up"
       : "down";
     state.track = null;
+    state.waveDirection = { lane: lane - state.lane, row: row - state.row };
     state.offset = { x: 0, y: 0 };
     state.lane = Math.round(lane);
     state.row = Math.round(row);
@@ -427,6 +429,8 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
     select(lane, row);
   }
   function navigatePlane(coordinate: { lane: number; row: number }) {
+    const previous = state.track ?? { lane: state.lane, row: state.row };
+    state.waveDirection = { lane: coordinate.lane - previous.lane, row: coordinate.row - previous.row };
     state.track = coordinate;
     state.wave = performance.now();
     const lane = Math.round(coordinate.lane),

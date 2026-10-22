@@ -19,6 +19,9 @@ export async function workLabTrackingRegression({ browser, origin }) {
   }
   await page.keyboard.up("ArrowDown");
   assert.ok(Number(await stage.getAttribute("data-movement-pulses")) > 15, "Repeated movement produces waves before selection standby completes");
+  const waveOrigin = (await stage.getAttribute("data-wave-origin")).split(",").map(Number);
+  const waveAhead = (await stage.getAttribute("data-wave-ahead")).split(",").map(Number);
+  assert.ok(waveAhead[1] - waveOrigin[1] > 5.9, "Scrolling prepares a wave six rows ahead in the actual travel direction");
   assert.ok(Math.max(...held.slice(4).map(n => n.error)) < 1.25, "Held navigation responds within one adjacent cell instead of accumulating spring lag");
   await page.waitForFunction(() => +document.querySelector(".lab-stage").dataset.trackingError < .015);
   const bounds = await stage.boundingBox();

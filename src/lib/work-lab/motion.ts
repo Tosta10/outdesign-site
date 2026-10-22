@@ -55,6 +55,13 @@ export function baselineSelectionWave(distance: number, age: number) {
   );
 }
 
+/** Advance in the archive's own 2.2-weighted plane, including diagonal drags. */
+export function aheadCell(cell: { lane: number; row: number }, direction: { lane: number; row: number }, distance: number) {
+  const length = Math.hypot(direction.lane * 2.2, direction.row);
+  const lead = Math.max(0, Math.min(16, distance));
+  return length > .0001 ? { lane: cell.lane + direction.lane / length * lead, row: cell.row + direction.row / length * lead } : { ...cell };
+}
+
 // Retained for the comparison experiments; the user chose the signed baseline.
 export function selectionWave(distance: number, age: number) {
   return Math.max(0, baselineSelectionWave(distance, age));

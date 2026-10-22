@@ -23,6 +23,7 @@ import {
 import {
   damp,
   baselineSelectionWave,
+  aheadCell,
   idleWave,
   settlingWave,
   columnStrength,
@@ -47,6 +48,7 @@ export type SceneState = {
   zoom: number;
   highlight: number;
   wave: number;
+  waveDirection: { lane: number; row: number };
   preferences: LabPreferences;
 };
 export function createLabScene(
@@ -294,7 +296,7 @@ export function createLabScene(
     rotation: { x: number; y: number };
   };
   const outgoing: Returning[] = [];
-  let pulses: { lane: number; row: number; time: number }[] = [],
+  let pulses: { lane: number; row: number; time: number; ahead?: { lane: number; row: number } }[] = [],
     idleGain = 0,
     observedWave = state.wave,
     lastInteraction = performance.now(),
@@ -355,6 +357,8 @@ export function createLabScene(
       host.dataset.coverScale = String(state.config.parameters.coverScale);
       host.dataset.cassetteColor = state.config.palette.shell;
       host.dataset.cameraFollow = String(state.config.parameters.cameraFollow);
+      host.dataset.cameraDistance = String(state.config.parameters.cameraDistance);
+      host.dataset.waveLead = String(state.config.parameters.waveLead);
     }
     const desiredQuality = software ? "low" : state.preferences.quality;
     if (quality !== desiredQuality) {
@@ -586,7 +590,11 @@ export function createLabScene(
     if (state.wave !== observedWave) {
       observedWave = state.wave;
       if (motionAllowed(state.preferences, "selectionWave")) {
-        pulses.push({ lane: state.track?.lane ?? state.lane, row: state.track?.row ?? state.row, time: state.wave });
+        const cell = { lane: state.track?.lane ?? state.lane, row: state.track?.row ?? state.row };
+        const ahead = p.waveLead > 0 && Math.hypot(state.waveDirection.lane, state.waveDirection.row) > .0001 ? aheadCell(cell, state.waveDirection, p.waveLead) : undefined;
+        pulses.push({ ...cell, time: state.wave, ahead });
+        host.dataset.waveOrigin = `${cell.lane},${cell.row}`;
+        host.dataset.waveAhead = ahead ? `${ahead.lane},${ahead.row}` : "";
         host.dataset.movementPulses = String(Number(host.dataset.movementPulses || 0) + 1);
       }
     }
@@ -607,11 +615,16 @@ export function createLabScene(
       let ripple = 0;
       for (const pulse of motionAllowed(state.preferences, "selectionWave")
         ? pulses
-        : [])
+        : []) {
         ripple += baselineSelectionWave(
           Math.hypot(r - pulse.row, (l - pulse.lane) * 2.2),
           (now - pulse.time) / 1000 * p.waveSpeed,
         );
+        if (pulse.ahead) ripple += .65 * baselineSelectionWave(
+          Math.hypot(r - pulse.ahead.row, (l - pulse.ahead.lane) * 2.2),
+          (now - pulse.time) / 1000 * p.waveSpeed + .08,
+        );
+      }
       return (
         shoulderHeight +
         (motionAllowed(state.preferences, "idleWave")
@@ -796,7 +809,7 @@ export function createLabScene(
       mesh.instanceMatrix.needsUpdate = true;
     artGeometry.attributes.odImage.needsUpdate = true;
     body.computeBoundingSphere();
-    const browseDistance = narrow ? 0.68 : 0.72;
+    const browseDistance = Math.max(.36, p.cameraDistance - (narrow ? .04 : 0));
     aim.set(
       model.object.position.x * blend,
       1.0 * (1 - blend) + model.object.position.y * blend,

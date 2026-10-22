@@ -438,7 +438,7 @@ export function SiteRenderer({
                 )}
               </h1>
               <p>{text(`intro.${page}.description`)} </p>
-              <span className="page-intro-number">
+              <span className="page-intro-number" aria-hidden="true">
                 {page === "journal" ? "03" : page === "resources" ? "05" : "04"}
               </span>
             </div>

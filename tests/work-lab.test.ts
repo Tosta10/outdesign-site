@@ -14,6 +14,17 @@ import {
   wrap,
 } from "../src/lib/work-lab/state.ts";
 import { initialContent } from "../supabase/functions/_shared/seed.ts";
+import { aheadCell } from "../src/lib/work-lab/motion.ts";
+test("look-ahead waves follow forward, reverse and diagonal archive navigation", () => {
+  const cell = { lane: 3, row: 8 };
+  assert.deepEqual(aheadCell(cell, { lane: 0, row: 2 }, 6), { lane: 3, row: 14 });
+  assert.deepEqual(aheadCell(cell, { lane: 0, row: -1 }, 6), { lane: 3, row: 2 });
+  assert.deepEqual(aheadCell(cell, { lane: 1, row: 0 }, 0), cell);
+  assert.deepEqual(aheadCell(cell, { lane: 0, row: 0 }, 6), cell);
+  const diagonal = aheadCell(cell, { lane: -2, row: 3 }, 100);
+  assert.ok(diagonal.lane < cell.lane && diagonal.row > cell.row);
+  assert.ok(Math.abs(Math.hypot((diagonal.lane - cell.lane) * 2.2, diagonal.row - cell.row) - 16) < 1e-9);
+});
 test("portfolio starts empty and the glass cassette placeholder is not a fabricated work", () => {
   assert.deepEqual(initialContent.projects, []);
   const items = createLabItems([]);

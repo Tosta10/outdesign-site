@@ -16,6 +16,8 @@ export async function workLabAuthorRegression({ page, api, password1, password2 
   assert.ok(await root.locator("[data-element-key]").count() >= 60, "The complete page exposes internal editable layers");
   await label("封面貼合比例").fill("0.58");
   await label("相機跟隨速度").fill("32");
+  await label("陣列相機距離倍率").fill("0.55");
+  await label("移動前方波動距離").fill("8");
   await label("卡帶本體").fill("#b5c9bc");
   await page.waitForFunction(() => document.querySelector('.editor-canvas .lab-stage')?.dataset.coverScale === "0.58");
   await button("復原上一步").click();
@@ -31,6 +33,8 @@ export async function workLabAuthorRegression({ page, api, password1, password2 
   const draft = await api.store.getDraft();
   assert.equal(draft.content.workLab.parameters.coverScale, .58);
   assert.equal(draft.content.workLab.parameters.cameraFollow, 32);
+  assert.equal(draft.content.workLab.parameters.cameraDistance, .55);
+  assert.equal(draft.content.workLab.parameters.waveLead, 8);
   assert.equal(draft.content.workLab.palette.shell, "#b5c9bc");
   assert.equal(draft.content.presentation.copy["lab.menu"], "探索導航");
   await label("切換模式").selectOption("blocks");

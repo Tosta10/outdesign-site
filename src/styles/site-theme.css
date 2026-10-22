@@ -5,9 +5,15 @@ html[data-site-theme="light"], .site[data-site-theme="light"] {
   --color-line: #263b302b !important; --color-white: #202923 !important; --color-accent: #465d51 !important;
 }
 html[data-site-theme="dark"] { color-scheme: dark; }
-.site-settings-button { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; color: inherit; }
-.nav-drawer > .site-settings-button { width: 100%; justify-content: flex-start; gap: 14px; padding: 18px 0; margin-top: 20px; border-top: 1px solid var(--color-line); font: 16px/1.5 system-ui; }
-.site-settings-button:hover { background: var(--color-line); border-radius: 50%; }
+.site-settings-button { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; color: inherit; border-radius: 8px; transition: background-color 160ms ease, color 160ms ease; }
+.nav-drawer > .site-settings-button { width: 100%; justify-content: flex-start; gap: 14px; padding: 16px 12px; margin-top: 20px; border: 1px solid var(--color-line); font: 16px/1.5 system-ui; }
+.site-settings-button svg { flex-shrink: 0; transition: transform 180ms ease; }
+.site-settings-button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+.site-settings-button:active { background: var(--color-raised); }
+@media (hover: hover) {
+  .site-settings-button:hover { background: var(--color-raised); color: var(--color-accent); }
+  .site-settings-button:hover svg { transform: rotate(22deg); }
+}
 .site-settings-dialog { width: min(440px, calc(100vw - 32px)); padding: 28px; border: 1px solid var(--color-line); border-radius: 12px; background: var(--color-surface); color: var(--color-text); }
 .site-settings-dialog::backdrop { background: #0008; backdrop-filter: blur(8px); }
 .site-settings-dialog header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
@@ -24,8 +30,19 @@ html[data-site-theme="dark"] { color-scheme: dark; }
 .site[data-site-theme="light"] :is(.nav-drawer,.project-dialog,.note-dialog,.music-player,.work-card,.note-card,.resource-card) { background: var(--color-surface); color: var(--color-text); border-color: var(--color-line); }
 .site[data-site-theme="light"] .glass-surface { background: #f5f5eecc; border-color: var(--color-line); }
 .site[data-site-theme="light"] .hero-image { opacity: .18; }
-.site[data-site-theme="light"] :is(.hero-frame::before,.hero-frame::after) { opacity: .15; }
-.site[data-site-theme="light"] .wordmark img { filter: invert(1); }
+.site[data-site-theme="light"] .lunar-backdrop { opacity: .12; }
+.site[data-site-theme="light"] .hero-frame { border-color: var(--color-line); }
+.site[data-site-theme="light"] .mission-study img { mix-blend-mode: normal; opacity: .85; }
+.site[data-site-theme="light"] :is(.page-intro h1 em,.section-heading h2 .muted,.section-intro,.mission-values,.scroll-cue,.caption-index,.note-date,.note-tag,.note-plus,.note-body,.music-artist,.audio-feedback,.contact-spark,.empty-state,.drawer-top,.nav-index,.nav-drawer nav > a small,.attachment-link > span:nth-child(3)) { color: var(--color-muted); }
+.site[data-site-theme="light"] .page-intro-number { color: color-mix(in srgb, var(--color-text) 14%, transparent); }
+.site[data-site-theme="light"] :is(.card-meta,.mission-study,.node-border,.node-divider hr,.menu-toggle,.circle-arrow,.music-play,.contact-orbit,.button,.scroll-line,.detail-dialog,.work-image-button) { border-color: color-mix(in srgb, var(--color-text) 32%, transparent); }
+.site[data-site-theme="light"] :is(.card-meta i,.sound-bars i), .site[data-site-theme="light"] .scroll-line::after { background: var(--color-muted); }
+.site[data-site-theme="light"] .work-arrow { background: var(--color-surface); border-color: var(--color-line); }
+.site[data-site-theme="light"] .demo-tag { background: var(--color-surface); color: var(--color-text); border-color: var(--color-line); }
+.site[data-site-theme="light"] .press-feedback::after { border-color: var(--color-accent); }
+.site[data-site-theme="light"] :is(.circle-arrow,.icon-button,.music-play,.contact-orbit,.button):hover { background: var(--color-raised); }
+.site[data-site-theme="light"] .hero-frame::before, .site[data-site-theme="light"] .hero-frame::after { opacity: .15; }
+.site[data-site-theme="light"] .wordmark img[src$="/assets/outdesign-mark.webp"] { filter: invert(1); }
 .site[data-site-theme="light"] :is(.mission-card,.page-intro,.contact-section,.site-footer) { color: var(--color-text); }
 .site[data-site-theme="light"] .nav-drawer a { color: var(--color-text); }
 .site[data-site-theme="light"] .filters button[aria-pressed="true"] { background: var(--color-text); color: var(--color-bg); }

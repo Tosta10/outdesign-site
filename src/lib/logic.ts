@@ -19,7 +19,7 @@ export const logicCatalog: {
   label: string;
   hint: string;
 }[] = [
-  { op: "lab-parameter", category: "work-lab", label: "設定作品動態參數", hint: "相機、波浪、拖曳、貼圖等 25 個參數" },
+  { op: "lab-parameter", category: "work-lab", label: "設定作品動態參數", hint: "相機、波浪、拖曳、貼圖等 27 個參數" },
   { op: "lab-effect", category: "work-lab", label: "設定作品效果開關", hint: "14 項獨立動態效果" },
   { op: "lab-option", category: "work-lab", label: "設定作品展示選項", hint: "配色、品質、動態、音訊與玻璃" },
   { op: "lab-palette", category: "work-lab", label: "設定卡帶材質顏色", hint: "本體、框架、襯底與玻璃" },

@@ -27,4 +27,22 @@ export async function siteThemeRegression({ page, origin }) {
       await page.screenshot({ path: `artifacts/site-light-${name}.png` });
     }
   }
+  const mobileContext = await page.context().browser().newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: "reduce" });
+  try {
+    const mobile = await mobileContext.newPage();
+    await mobile.addInitScript(() => localStorage.setItem("outdesign.site.theme.v1", "light"));
+    await mobile.goto(`${origin}/`, { waitUntil: "networkidle" });
+    await mobile.waitForFunction(() => document.body.dataset.pageState === "ready");
+    const surface = await mobile.locator(".mission-card").evaluate(element => {
+      const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d");
+      ctx.fillStyle = getComputedStyle(element).backgroundColor;
+      ctx.fillRect(0, 0, 1, 1);
+      return [...ctx.getImageData(0, 0, 1, 1).data];
+    });
+    assert.ok(surface.slice(0, 3).every(value => value > 180), "Touch-device glass surfaces follow the light palette instead of a forced dark fallback");
+    assert.ok(Number(await mobile.locator(".lunar-backdrop").evaluate(element => getComputedStyle(element).opacity)) < .2, "The light home background does not obscure its dark text");
+    const axe = await new AxeBuilder({ page: mobile }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+    assert.deepEqual(axe.violations.filter(v => ["serious", "critical"].includes(v.impact)), [], "The light touch layout remains readable");
+    await mobile.screenshot({ path: "artifacts/site-light-mobile-home.png", fullPage: true });
+  } finally { await mobileContext.close(); }
 }

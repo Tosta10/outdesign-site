@@ -116,6 +116,6 @@ html[data-transition="none"] {
 @media (hover: none), (update: slow) {
   .glass-surface {
     backdrop-filter: none !important;
-    background: #141414ed !important;
+    background: color-mix(in srgb, var(--color-surface) 94%, transparent) !important;
   }
 }
