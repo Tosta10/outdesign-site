@@ -22,7 +22,7 @@ import {
 } from "./state";
 import {
   damp,
-  dampMoving,
+  followNavigation,
   baselineSelectionWave,
   aheadCell,
   idleWave,
@@ -478,12 +478,10 @@ export function createLabScene(
       if (trackMotion && now < state.navigationUntil) {
         fastSettling = true;
         const speed = Math.max(Math.abs(state.navigationVelocity.lane), Math.abs(state.navigationVelocity.row));
-        const horizon = Math.min(.05, .85 / Math.max(1, speed));
         const elapsed = Math.max(0, (now - state.navigationTime) / 1000);
-        const prediction = Math.min(horizon, elapsed);
         for (const [spring, axis] of [[laneSpring, "lane"], [rowSpring, "row"]] as const) {
           const velocity = state.navigationVelocity[axis];
-          dampMoving(spring, state[axis] + velocity * prediction, elapsed < horizon ? velocity : 0, p.cameraFollow, dt);
+          followNavigation(spring, state[axis], velocity, speed, elapsed, p.cameraFollow, dt);
         }
       } else if (trackMotion && fastSettling) {
         damp(laneSpring, state.lane, p.cameraFollow, dt);
