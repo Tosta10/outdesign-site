@@ -224,7 +224,7 @@ try {
   await page.locator("[data-work-lab][data-engine]").waitFor();
   assert.equal(await page.locator(".work-card").count(),0,"Old portfolio fields start empty");
   assert.equal(await page.locator("[data-work-lab]").getAttribute("data-empty"),"true");
-  assert.equal(await page.locator("[data-work-lab]").getAttribute("data-mode"),"detail");
+  assert.equal(await page.locator("[data-work-lab]").getAttribute("data-mode"),"browse");
   await page.goto(`${origin}/journal/`, { waitUntil: "networkidle" });
   await page.locator(".note-item summary").first().click();
   await settleCanvas();

@@ -31,13 +31,19 @@ export async function workLabRegression({ page, api, origin }) {
       demo: false,
     },
   ];
+  content.projects.push({
+    ...content.projects[0],
+    id: crypto.randomUUID(),
+    title: "層疊影像",
+    url: "",
+  });
   const next = await api.store.saveDraft(content, draft.revision);
   await api.store.publish(next.revision, crypto.randomUUID());
   await page.goto(`${origin}/work/`, { waitUntil: "networkidle" });
   const root = page.locator("[data-work-lab]"),
     stage = page.locator(".lab-stage");
   await root
-    .locator("[data-lab-title]")
+    .locator("[data-lab-browse-title]")
     .filter({ hasText: "光的切片" })
     .waitFor();
   await page.waitForFunction(
@@ -51,31 +57,75 @@ export async function workLabRegression({ page, api, origin }) {
     "true",
     "Artwork is a single plane inside the cassette",
   );
-  await root.locator('[data-lab-family-index="2"]').click();
+  assert.equal(await root.getAttribute("data-mode"), "browse");
+  assert.equal(await stage.getAttribute("data-array-overlap"), "false");
+  assert.equal(Number(await stage.getAttribute("data-array-cells")), 585);
+  assert.deepEqual(
+    await root.evaluate((el) => ({
+      x: el.getBoundingClientRect().x,
+      y: el.getBoundingClientRect().y,
+      w: el.clientWidth,
+      h: el.clientHeight,
+    })),
+    { x: 0, y: 0, w: 1440, h: 1080 },
+    "The archive occupies the whole work page",
+  );
+  await root.screenshot({ path: "artifacts/work-array-desktop.png" });
+  await root.getByRole("button", { name: "下一個分類", exact: true }).click();
   assert.equal(
-    await root.locator("[data-lab-title]").textContent(),
+    await root.locator("[data-lab-browse-title]").textContent(),
     "空間與留白",
   );
-  await root.locator('[data-lab-family-index="0"]').click();
-  await root.screenshot({
-    path: "artifacts/work-glass-detail.png",
-  });
+  await root.getByRole("button", { name: "上一個分類", exact: true }).click();
+  await stage.focus();
+  await page.keyboard.press("ArrowDown");
+  assert.equal(
+    await root.locator("[data-lab-browse-title]").textContent(),
+    "層疊影像",
+  );
+  await page.keyboard.press("ArrowDown");
+  assert.equal(
+    await root.locator("[data-lab-browse-title]").textContent(),
+    "光的切片",
+    "Rows wrap inside their own category",
+  );
+  await page.mouse.move(250, 350);
+  await page.mouse.wheel(0, -180);
+  await page.waitForFunction(
+    () => document.querySelector("[data-work-lab]")?.dataset.row === "1",
+  );
+  assert.equal(
+    await root.locator("[data-lab-browse-title]").textContent(),
+    "層疊影像",
+  );
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
+  await root.getByRole("button", { name: "開啟作品", exact: true }).click();
+  await page.waitForFunction(
+    () =>
+      document.querySelector("[data-work-lab]")?.dataset.revealing === "false",
+  );
+  await root.screenshot({ path: "artifacts/work-glass-detail.png" });
+  await root
+    .getByRole("button", { name: "360° 卡帶檢視 ↗", exact: true })
+    .click();
   await root.getByRole("button", { name: "拆解構件 ＋", exact: true }).click();
   await page.waitForFunction(
     () => Number(document.querySelector(".lab-stage")?.dataset.explode) > 0.95,
   );
-  await root.getByRole("button", { name: "磨砂玻璃", exact: true }).click();
+  await root.getByRole("button", { name: "磨砂", exact: true }).click();
   assert.equal(
     await root
-      .getByRole("button", { name: "切換清晰", exact: true })
+      .getByRole("button", { name: "磨砂", exact: true })
       .getAttribute("aria-pressed"),
     "true",
   );
-  await root.getByRole("button", { name: "切換清晰", exact: true }).click();
+  await root.getByRole("button", { name: "清晰", exact: true }).click();
+  await root.getByRole("button", { name: "返回作品資料", exact: true }).click();
   await root.getByRole("tab", { name: "卡帶結構", exact: true }).click();
   await root.locator('[data-lab-part="2"]').click();
   assert.equal(await root.getAttribute("data-mode"), "inspect");
-  const before = await stage.getAttribute("data-rotation"),
+  const before = await stage.getAttribute("data-camera-position"),
     b = await stage.boundingBox();
   await page.mouse.move(b.x + b.width * 0.5, b.y + b.height * 0.5);
   await page.mouse.down();
@@ -84,22 +134,25 @@ export async function workLabRegression({ page, api, origin }) {
   });
   await page.mouse.up();
   await page.waitForFunction(
-    (old) => document.querySelector(".lab-stage")?.dataset.rotation !== old,
+    (old) =>
+      document.querySelector(".lab-stage")?.dataset.cameraPosition !== old,
     before,
   );
   await root.screenshot({
     path: "artifacts/work-glass-exploded.png",
   });
   await root.getByRole("button", { name: "重設視角 ↗", exact: true }).click();
+  await root.getByRole("button", { name: "返回作品資料", exact: true }).click();
   await root.getByRole("button", { name: "開啟展示設定", exact: true }).click();
   await root.locator('[data-lab-setting="theme"]').selectOption("light");
   await root.locator('[data-lab-setting="quality"]').selectOption("high");
   await root.getByRole("button", { name: "關閉展示設定", exact: true }).click();
   await page.waitForTimeout(1200);
-  await root.getByRole("button", { name: "重組構件 −", exact: true }).click();
   await root
     .getByRole("button", { name: "360° 卡帶檢視 ↗", exact: true })
     .click();
+  await root.getByRole("button", { name: "− 一鍵重組", exact: true }).click();
+  await root.getByRole("button", { name: "返回作品資料", exact: true }).click();
   await root.getByRole("tab", { name: "作品介紹", exact: true }).click();
   await root.screenshot({
     path: "artifacts/work-glass-light.png",
@@ -136,10 +189,78 @@ export async function workLabRegression({ page, api, origin }) {
       false,
       `Work cassette overflow ${width}`,
     );
-    if (width === 390)
-      await root.screenshot({
-        path: "artifacts/work-glass-mobile.png",
+    if (width === 390) {
+      await root.screenshot({ path: "artifacts/work-glass-mobile.png" });
+      await root
+        .getByRole("button", { name: "360° 卡帶檢視 ↗", exact: true })
+        .click();
+      await page.waitForTimeout(200);
+      const beforeTouch = await stage.getAttribute("data-camera-position");
+      const touch = await page.context().newCDPSession(page);
+      await touch.send("Emulation.setTouchEmulationEnabled", {
+        enabled: true,
+        maxTouchPoints: 5,
       });
+      await touch.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [
+          { x: 140, y: 320 },
+          { x: 250, y: 320 },
+        ],
+      });
+      await touch.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [
+          { x: 90, y: 290 },
+          { x: 300, y: 360 },
+        ],
+      });
+      await touch.send("Input.dispatchTouchEvent", {
+        type: "touchEnd",
+        touchPoints: [],
+      });
+      await page.waitForFunction(
+        (old) =>
+          document.querySelector(".lab-stage")?.dataset.cameraPosition !== old,
+        beforeTouch,
+      );
+      await root.screenshot({ path: "artifacts/work-viewer-mobile.png" });
+      await root
+        .getByRole("button", { name: "返回作品資料", exact: true })
+        .click();
+      await root.locator('[data-lab-action="back"]').click();
+      await root.screenshot({ path: "artifacts/work-array-mobile.png" });
+      const beforeSwipe = [
+        await root.getAttribute("data-lane"),
+        await root.getAttribute("data-row"),
+      ].join(":");
+      await touch.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ x: 140, y: 230 }],
+      });
+      for (let i = 1; i <= 5; i++)
+        await touch.send("Input.dispatchTouchEvent", {
+          type: "touchMove",
+          touchPoints: [{ x: 140 + i * 20, y: 230 + i * 8 }],
+        });
+      await touch.send("Input.dispatchTouchEvent", {
+        type: "touchEnd",
+        touchPoints: [],
+      });
+      assert.notEqual(
+        [
+          await root.getAttribute("data-lane"),
+          await root.getAttribute("data-row"),
+        ].join(":"),
+        beforeSwipe,
+        "Touch drag navigates projected archive tracks",
+      );
+      await touch.send("Emulation.setTouchEmulationEnabled", {
+        enabled: false,
+      });
+      await touch.detach();
+      await root.getByRole("button", { name: "開啟作品", exact: true }).click();
+    }
   }
   await page.setViewportSize({ width: 1440, height: 1080 });
   // Exercise the real timeline in addition to the reduced-motion path.
@@ -164,18 +285,75 @@ export async function workLabRegression({ page, api, origin }) {
   await root.locator(".lab-boot").waitFor({ state: "hidden", timeout: 15000 });
   await root.locator('[data-lab-action="back"]').click();
   await stage.focus();
+  const motionProof = [];
+  for (const key of ["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"]) {
+    await page.waitForTimeout(1400);
+    const before = await stage.getAttribute("data-array-position");
+    await page.keyboard.press(key);
+    const target = [
+      Number(await root.getAttribute("data-lane")),
+      Number(await root.getAttribute("data-row")),
+    ];
+    const axis = key === "ArrowRight" || key === "ArrowLeft" ? 0 : 1;
+    await page.waitForFunction(
+      ({ before, target, axis }) => {
+        const values =
+          document
+            .querySelector(".lab-stage")
+            ?.getAttribute("data-array-position")
+            ?.split(",")
+            .map(Number) || [];
+        return (
+          Math.abs(values[axis] - Number(before.split(",")[axis])) > 0.002 &&
+          Math.abs(values[axis] - target[axis]) > 0.002
+        );
+      },
+      { before, target, axis },
+    );
+    const middle = await stage.getAttribute("data-array-position");
+    await page.waitForFunction(
+      ({ target, axis }) => {
+        const values =
+          document
+            .querySelector(".lab-stage")
+            ?.getAttribute("data-array-position")
+            ?.split(",")
+            .map(Number) || [];
+        return Math.abs(values[axis] - target[axis]) < 0.03;
+      },
+      { target, axis },
+    );
+    motionProof.push({
+      key,
+      before,
+      middle,
+      target,
+      settled: await stage.getAttribute("data-array-position"),
+    });
+  }
+  await writeFile(
+    "artifacts/work-motion-proof.json",
+    JSON.stringify(motionProof, null, 2),
+  );
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await page.waitForFunction(
     () =>
       document.querySelector("[data-work-lab]")?.dataset.revealing === "false",
   );
+  await root.getByRole("button", { name: "開啟展示設定", exact: true }).click();
+  await root
+    .locator('[data-lab-setting="motionPreset"]')
+    .selectOption("system");
+  await root.getByRole("button", { name: "關閉展示設定", exact: true }).click();
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.waitForFunction(
     () => document.querySelector("[data-work-lab]")?.dataset.motion === "false",
   );
   await page.setViewportSize({ width: 1440, height: 400 });
-  await page.evaluate(() => window.scrollTo(0, 0));
+  await root.evaluate((el) => {
+    el.style.transform = "translateY(200vh)";
+  });
   await page.waitForTimeout(250);
   const idleFrames = await stage.getAttribute("data-frames");
   await page.waitForTimeout(200);
@@ -184,6 +362,9 @@ export async function workLabRegression({ page, api, origin }) {
     idleFrames,
     "Offscreen scene stops rendering",
   );
+  await root.evaluate((el) => {
+    el.style.transform = "";
+  });
   await page.setViewportSize({ width: 1440, height: 1080 });
   const axe = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
@@ -209,7 +390,7 @@ export async function workLabRegression({ page, api, origin }) {
   await fallback.goto(`${origin}/work/`, { waitUntil: "networkidle" });
   await fallback.locator('[data-work-lab][data-engine="fallback"]').waitFor();
   assert.equal(
-    await fallback.locator("[data-lab-title]").textContent(),
+    await fallback.locator("[data-lab-browse-title]").textContent(),
     "光的切片",
   );
   await fallback.locator("[data-work-lab]").screenshot({
@@ -217,7 +398,7 @@ export async function workLabRegression({ page, api, origin }) {
   });
   await fallback.close();
   await page.evaluate(() => {
-    localStorage.removeItem("outdesign.work-lab.preferences.v1");
+    localStorage.removeItem("outdesign.work-lab.preferences.v2");
     localStorage.removeItem("outdesign.work-lab.saved.v1");
   });
 }

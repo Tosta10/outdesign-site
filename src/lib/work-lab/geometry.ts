@@ -74,12 +74,12 @@ export function makeObject(
     add(0, new T.BoxGeometry(2.29, 0.035, 0.22), metal, 0, y);
   add(1, new T.BoxGeometry(2.24, 2.88, 0.055), glass, 0, 0, 0.2);
   const pictureCanvas = document.createElement("canvas");
-  pictureCanvas.width = 1024;
+  pictureCanvas.width = 1536;
   pictureCanvas.height = 1280;
   const ctx = pictureCanvas.getContext("2d")!;
   const placeholder = () => {
     ctx.fillStyle = "#dfe6e0";
-    ctx.fillRect(0, 0, 1024, 1280);
+    ctx.fillRect(0, 0, 1536, 1280);
     ctx.strokeStyle = "#76948d";
     ctx.lineWidth = 1;
     for (let i = 0; i < 14; i++) {
@@ -144,14 +144,14 @@ diffuseColor *= mix(odSoft, odSharp, odVisible);
       if (object.userData.disposed) return;
       try {
         ctx.fillStyle = "#e3e9e4";
-        ctx.fillRect(0, 0, 1024, 1280);
+        ctx.fillRect(0, 0, 1536, 1280);
         const scale = Math.min(
-            1024 / image.naturalWidth,
+            1536 / image.naturalWidth,
             1280 / image.naturalHeight,
           ),
           w = image.naturalWidth * scale,
           h = image.naturalHeight * scale;
-        ctx.drawImage(image, (1024 - w) / 2, (1280 - h) / 2, w, h);
+        ctx.drawImage(image, (1536 - w) / 2, (1280 - h) / 2, w, h);
         ctx.getImageData(0, 0, 1, 1);
         texture.needsUpdate = true;
         textureReady(true);

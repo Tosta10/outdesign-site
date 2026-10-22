@@ -4,6 +4,7 @@ export type LabItem = {
   id: number;
   key: string;
   family: number;
+  category: string;
   variant: number;
   code: string;
   title: string;
@@ -38,6 +39,7 @@ export function createLabItems(
           1,
           families.indexOf(p.category as (typeof families)[number]),
         ),
+        category: p.category,
         variant: 0,
         code: `NO.${String(i + 1).padStart(3, "0")}`,
         title: p.title,
@@ -54,6 +56,7 @@ export function createLabItems(
           id: 0,
           key: "empty",
           family: 0,
+          category: "作品",
           variant: 0,
           code: "NO.001",
           title: "下一件作品，從這裡開始。",
@@ -99,10 +102,29 @@ export const parts = [
   "資訊基板",
   "固定構件",
 ];
+export const motionLabels = {
+  boot: "開場動畫",
+  selectionWave: "選取波浪",
+  idleWave: "閒置起伏",
+  pointerParallax: "指標視差",
+  dragMomentum: "拖曳慣性",
+  selectionTransition: "切列與切檔過渡",
+  detailTransition: "抽取與歸位鏡頭",
+  modelDecryption: "玻璃解密",
+  documentReveal: "文件揭示",
+  rollingText: "文字滾動",
+  rollingNumbers: "數字滾動",
+  surfaceTransitions: "面板轉場",
+  viewerNavigation: "360° 導覽阻尼",
+  viewerModelTransition: "拆解與重組過渡",
+} as const;
+export type MotionKey = keyof typeof motionLabels;
 export type LabPreferences = {
   theme: "dark" | "light";
   quality: "low" | "medium" | "high";
   motion: boolean;
+  motionPreset: "system" | "full" | "reduced";
+  effects: Record<MotionKey, boolean>;
   sound: boolean;
   ambient: boolean;
   volume: number;
@@ -116,12 +138,26 @@ export function normalizePreferences(
       ? (value as Record<string, unknown>)
       : {};
   return {
-    theme: input.theme === "light" ? "light" : "dark",
+    theme: input.theme === "dark" ? "dark" : "light",
     quality:
       input.quality === "high" || input.quality === "low"
         ? input.quality
         : "medium",
-    motion: !reduced && input.motion !== false,
+    motion:
+      input.motionPreset === "full" ||
+      (input.motionPreset !== "reduced" && !reduced && input.motion !== false),
+    motionPreset:
+      input.motionPreset === "full" || input.motionPreset === "reduced"
+        ? input.motionPreset
+        : "system",
+    effects: Object.fromEntries(
+      Object.keys(motionLabels).map((key) => [
+        key,
+        (input.effects && typeof input.effects === "object"
+          ? (input.effects as Record<string, unknown>)[key]
+          : true) !== false,
+      ]),
+    ) as Record<MotionKey, boolean>,
     sound: input.sound === true,
     ambient: input.ambient === true,
     volume:
@@ -129,4 +165,46 @@ export function normalizePreferences(
         ? Math.max(0, Math.min(0.3, input.volume))
         : 0.12,
   };
+}
+
+// A lane is a category; rows are independent works inside that category.
+export function archiveColumns(items: LabItem[]) {
+  const labels = [...new Set(items.map((item) => item.category))];
+  return labels.map((label) => ({
+    label,
+    items: items.filter((item) => item.category === label),
+  }));
+}
+export function itemAtCell(items: LabItem[], lane: number, row: number) {
+  const columns = archiveColumns(items);
+  return itemAt(columns[wrap(Math.round(lane), columns.length)].items, row);
+}
+export function locateItem(items: LabItem[], key: string) {
+  const columns = archiveColumns(items);
+  const lane = Math.max(
+    0,
+    columns.findIndex((column) =>
+      column.items.some((item) => item.key === key),
+    ),
+  );
+  return {
+    lane,
+    row: Math.max(
+      0,
+      columns[lane].items.findIndex((item) => item.key === key),
+    ),
+  };
+}
+export const ARCHIVE_LAYOUT = {
+  width: 3.44,
+  height: 2.94,
+  depth: 0.22,
+  columnGap: 4.15,
+  rowGap: 0.48,
+  lanes: 9,
+  rows: 65,
+} as const;
+
+export function motionAllowed(preferences: LabPreferences, key: MotionKey) {
+  return preferences.motion && preferences.effects[key];
 }

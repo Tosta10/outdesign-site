@@ -1,15 +1,28 @@
 import {
   families,
   normalizePreferences,
-  itemAt,
+  motionAllowed,
+  type MotionKey,
+  itemAtCell,
+  archiveColumns,
+  locateItem,
   type LabItem,
   wrap,
   type LabMode,
 } from "./state";
+import { ArchiveDrag, ArchivePlaneMomentum } from "./archive-drag";
+import { SurfaceTransition } from "./ui-transitions";
+import {
+  createRollingNumber,
+  createRollingText,
+  type RollingTextController,
+  type RollingNumberController,
+} from "@kitlangton/rolling-number";
+import "@kitlangton/rolling-number/styles.css";
 import { LabAudio } from "./audio";
 import type { SceneState } from "./scene";
 const live = new WeakMap<HTMLElement, () => void>();
-const key = "outdesign.work-lab.preferences.v1",
+const key = "outdesign.work-lab.preferences.v2",
   saveKey = "outdesign.work-lab.saved.v1";
 export async function initWorkLab(root: HTMLElement): Promise<() => void> {
   live.get(root)?.();
@@ -39,9 +52,11 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
   const allItems = JSON.parse(root.dataset.labItems || "[]") as LabItem[];
   const state: SceneState = {
     items: allItems,
+    track: null,
+    pointer: { x: 0, y: 0 },
     lane: 0,
     row: 0,
-    mode: "detail",
+    mode: "browse",
     exploded: false,
     frosted: false,
     rotation: { x: 0.08, y: 0.12 },
@@ -61,25 +76,86 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
     gamepadFrame = 0,
     gamepadLast = 0;
   const animations = new Set<Animation>();
+  const rollingText = new Map<string, RollingTextController>();
+  const rollingNumbers = new Map<string, RollingNumberController>();
+  for (const selector of [
+    "[data-lab-browse-code]",
+    "[data-lab-browse-title]",
+    "[data-lab-browse-category]",
+    "[data-lab-column-label]",
+    "[data-lab-column-number]",
+  ]) {
+    const element = q(selector);
+    rollingText.set(
+      selector,
+      createRollingText(element, {
+        text: element.textContent || "",
+        duration: 460,
+        motionBlur: true,
+        transition: "direct",
+        stagger: "none",
+        animated: motionAllowed(state.preferences, "rollingText"),
+      }),
+    );
+  }
+  rollingNumbers.set(
+    "[data-lab-number]",
+    createRollingNumber(q("[data-lab-number]"), {
+      value: 1,
+      locales: "en-US",
+      format: { minimumIntegerDigits: 2, useGrouping: false },
+      duration: 460,
+      motionBlur: true,
+      animated: motionAllowed(state.preferences, "rollingText"),
+    }),
+  );
+  let rollingDirection: "up" | "down" = "up";
   const text = (selector: string, value: string) => {
-    const el = q(selector);
-    if (el.textContent === value) return;
-    el.getAnimations().forEach((a) => a.cancel());
-    el.textContent = value;
-    if (state.preferences.motion) {
-      const animation = el.animate(
-        [
-          { opacity: 0.2, transform: "translateY(8px)" },
-          { opacity: 1, transform: "translateY(0)" },
-        ],
-        { duration: 260, easing: "cubic-bezier(.2,.8,.2,1)" },
-      );
-      animations.add(animation);
-      void animation.finished
-        .catch(() => {})
-        .finally(() => animations.delete(animation));
+    const reel = rollingText.get(selector);
+    if (reel) {
+      reel.update({
+        text: value,
+        animated: motionAllowed(state.preferences, "rollingText"),
+        direction: rollingDirection,
+      });
+      return;
     }
+    const number = rollingNumbers.get(selector);
+    if (number) {
+      number.update({
+        value: Number(value),
+        animated: motionAllowed(state.preferences, "rollingNumbers"),
+        direction: rollingDirection,
+      });
+      return;
+    }
+    const element = q(selector);
+    if (element.textContent !== value) element.textContent = value;
   };
+  const surfaces = new Map<HTMLElement, SurfaceTransition>();
+  for (const element of root.querySelectorAll<HTMLElement>(
+    ".lab-browse-info,.lab-detail",
+  ))
+    surfaces.set(element, new SurfaceTransition(element, element, 700, 240));
+  const modalSurfaces = new Map<HTMLDialogElement, SurfaceTransition>();
+  for (const dialog of root.querySelectorAll<HTMLDialogElement>(".lab-modal"))
+    modalSurfaces.set(dialog, new SurfaceTransition(dialog, dialog, 300, 200));
+  function showModal(dialog: HTMLDialogElement) {
+    if (!dialog.open) dialog.showModal();
+    modalSurfaces
+      .get(dialog)
+      ?.show(!motionAllowed(state.preferences, "surfaceTransitions"));
+  }
+  function closeModal(dialog: HTMLDialogElement) {
+    modalSurfaces
+      .get(dialog)
+      ?.hide(!motionAllowed(state.preferences, "surfaceTransitions"), () =>
+        dialog.close(),
+      );
+  }
+  let displayedMode: LabMode | undefined;
+  let ticksSignature = "";
+  const columnMemory = new Map<string, number>();
   const log = (message: string) => {
     const el = document.createElement("li");
     el.textContent = `${new Date().toLocaleTimeString("zh-TW", { hour12: false })} / ${message}`;
@@ -96,14 +172,90 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
     }
   }
   function sync() {
-    const item = itemAt(state.items, state.row + state.lane);
+    const item = itemAtCell(state.items, state.lane, state.row);
     root.dataset.mode = state.mode;
+    root.dataset.lane = String(state.lane);
+    root.dataset.row = String(state.row);
+    const columns = archiveColumns(state.items);
+    const column = columns[wrap(state.lane, columns.length)];
+    text("[data-lab-browse-code]", item.code);
+    text("[data-lab-browse-title]", item.title);
+    text("[data-lab-browse-category]", column.label);
+    text("[data-lab-column-label]", column.label);
+    text(
+      "[data-lab-column-number]",
+      `COLUMN ${String(wrap(state.lane, columns.length) + 1).padStart(2, "0")} / ${String(columns.length).padStart(2, "0")}`,
+    );
     root.dataset.theme = state.preferences.theme;
     root.dataset.motion = String(state.preferences.motion);
-    q(".lab-detail").hidden = state.mode === "browse";
-    q(".lab-stage-back").hidden = state.mode === "browse";
+    if (displayedMode !== state.mode) {
+      const detailPanel = q(".lab-detail"),
+        browsePanel = q(".lab-browse-info");
+      if (state.mode === "browse") {
+        surfaces
+          .get(detailPanel)
+          ?.hide(!motionAllowed(state.preferences, "surfaceTransitions"));
+        surfaces
+          .get(browsePanel)
+          ?.show(!motionAllowed(state.preferences, "surfaceTransitions"));
+      } else {
+        surfaces
+          .get(browsePanel)
+          ?.hide(!motionAllowed(state.preferences, "surfaceTransitions"));
+        surfaces
+          .get(detailPanel)
+          ?.show(!motionAllowed(state.preferences, "surfaceTransitions"));
+      }
+      displayedMode = state.mode;
+    }
+    const signature = column.items.map((item) => item.key).join(":");
+    if (ticksSignature !== signature) {
+      ticksSignature = signature;
+      q("[data-lab-ticks]").replaceChildren(
+        ...column.items.map((entry, index) => {
+          const button = document.createElement("button");
+          button.dataset.labTick = String(index);
+          button.setAttribute(
+            "aria-label",
+            `選擇作品 ${entry.code} ${entry.title}`,
+          );
+          button.title = `${entry.code} · ${entry.title}`;
+          return button;
+        }),
+      );
+    }
+    root
+      .querySelectorAll<HTMLElement>("[data-lab-tick]")
+      .forEach((button) =>
+        button.setAttribute(
+          "aria-pressed",
+          String(
+            Number(button.dataset.labTick) ===
+              wrap(state.row, column.items.length),
+          ),
+        ),
+      );
+    q(".lab-stage-back").hidden = state.mode !== "detail";
+    q("[data-lab-inspection]").hidden = state.mode !== "inspect";
+    q("[data-lab-viewer-code]").textContent = item.code;
+    q('[data-lab-action="clear"]').setAttribute(
+      "aria-pressed",
+      String(!state.frosted),
+    );
+    q('[data-lab-action="frosted"]').setAttribute(
+      "aria-pressed",
+      String(state.frosted),
+    );
+    if (state.mode === "inspect") {
+      root.setAttribute("role", "dialog");
+      root.setAttribute("aria-modal", "true");
+    } else {
+      root.removeAttribute("role");
+      root.removeAttribute("aria-modal");
+    }
     q(".lab-view-controls").hidden = state.mode === "browse";
     text("[data-lab-code]", item.code);
+    text("[data-lab-object-code]", item.code);
     text("[data-lab-title]", item.title);
     text("[data-lab-english]", item.english);
     text("[data-lab-description]", item.description);
@@ -123,12 +275,35 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
         ),
       );
     const poster = q(".lab-poster");
-    poster.querySelector("img")?.setAttribute("src", item.image);
+    let posterImage = poster.querySelector("img");
+    if (item.image) {
+      if (!posterImage) {
+        posterImage = document.createElement("img");
+        posterImage.alt = "";
+        poster.querySelector(".lab-illustrated-case")!.append(posterImage);
+      }
+      if (posterImage.getAttribute("src") !== item.image)
+        posterImage.src = item.image;
+      const placeholder = poster.querySelector<HTMLElement>(
+        ".lab-poster-placeholder",
+      );
+      if (placeholder) placeholder.hidden = true;
+    } else {
+      posterImage?.remove();
+      const placeholder = poster.querySelector<HTMLElement>(
+        ".lab-poster-placeholder",
+      );
+      if (placeholder) placeholder.hidden = false;
+    }
     q<HTMLButtonElement>("[data-lab-action=save]").disabled = item.empty;
     q<HTMLButtonElement>("[data-lab-action=export]").disabled = item.empty;
-    q("[data-lab-total]").textContent =
-      `/ ${String(allItems.filter((i) => !i.empty).length).padStart(2, "0")}`;
-    text("[data-lab-number]", String(item.id + 1).padStart(2, "0"));
+    q("[data-lab-total]").textContent = String(
+      column.items.filter((i) => !i.empty).length,
+    ).padStart(2, "0");
+    text(
+      "[data-lab-number]",
+      String(wrap(state.row, column.items.length) + 1).padStart(2, "0"),
+    );
     q("[data-lab-saved-count]").textContent = String(saved.length).padStart(
       2,
       "0",
@@ -178,10 +353,21 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
           el.checked = Boolean(v);
         else el.value = String(v);
       });
+    root
+      .querySelectorAll<HTMLInputElement>("[data-lab-effect]")
+      .forEach(
+        (input) =>
+          (input.checked =
+            state.preferences.effects[input.dataset.labEffect as MotionKey]),
+      );
     scene?.invalidate();
   }
   function select(lane: number, row: number, open = false) {
     cancelAnimationFrame(coastFrame);
+    rollingDirection = (row !== state.row ? row > state.row : lane > state.lane)
+      ? "up"
+      : "down";
+    state.track = null;
     state.offset = { x: 0, y: 0 };
     state.lane = Math.round(lane);
     state.row = Math.round(row);
@@ -189,11 +375,48 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
     if (open) mode("detail");
     else sync();
     if (state.preferences.sound)
-      audio.tick(itemAt(state.items, state.row + state.lane).id);
-    status.textContent = `${itemAt(state.items, state.row + state.lane).title} · Enter 探索，方向鍵切換。`;
+      audio.tick(itemAtCell(state.items, state.lane, state.row).id);
+    status.textContent = `${itemAtCell(state.items, state.lane, state.row).title} · Enter 探索，方向鍵切換。`;
+  }
+  function stepColumn(direction: number) {
+    const columns = archiveColumns(state.items),
+      previous = columns[wrap(state.lane, columns.length)];
+    columnMemory.set(previous.label, state.row);
+    const lane = state.lane + direction,
+      next = columns[wrap(lane, columns.length)];
+    const remembered = columnMemory.get(next.label) ?? 0;
+    const row =
+      remembered +
+      Math.round((state.row - remembered) / next.items.length) *
+        next.items.length;
+    select(lane, row);
+  }
+  function navigatePlane(coordinate: { lane: number; row: number }) {
+    state.track = coordinate;
+    const lane = Math.round(coordinate.lane),
+      row = Math.round(coordinate.row);
+    if (lane !== state.lane || row !== state.row) {
+      rollingDirection = (
+        row !== state.row ? row > state.row : lane > state.lane
+      )
+        ? "up"
+        : "down";
+      state.lane = lane;
+      state.row = row;
+      state.wave = performance.now();
+      sync();
+    } else scene?.invalidate();
   }
   function mode(value: LabMode) {
+    if (state.mode === "inspect" && value !== "inspect") {
+      state.exploded = false;
+      state.frosted = false;
+      state.highlight = -1;
+    }
+    cancelAnimationFrame(coastFrame);
+    state.track = null;
     state.mode = value;
+    root.dataset.navigation = "idle";
     if (value === "browse") {
       state.exploded = false;
       state.rotation = { x: 0.08, y: 0.12 };
@@ -208,7 +431,8 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
           : "進入 360° 物件檢視",
     );
     sync();
-    if (value === "browse") stage.focus({ preventScroll: true });
+    if (value === "browse" || value === "inspect")
+      stage.focus({ preventScroll: true });
   }
   function tab(index: number) {
     root.querySelectorAll<HTMLElement>("[data-lab-tab]").forEach((el) => {
@@ -223,9 +447,21 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
   function search(onlySaved = false) {
     const dialog = q<HTMLDialogElement>("[data-lab-modal=search]");
     dialog.dataset.saved = String(onlySaved);
+    dialog.dataset.family = "0";
+    q("#od-lab-search-title").textContent = onlySaved
+      ? "SAVED ARCHIVES / 收藏作品"
+      : "ARCHIVE INDEX / 作品索引";
+    dialog
+      .querySelectorAll<HTMLElement>("[data-lab-family-index]")
+      .forEach((button) =>
+        button.setAttribute(
+          "aria-pressed",
+          String(button.dataset.labFamilyIndex === "0"),
+        ),
+      );
     q<HTMLInputElement>("[data-lab-search]").value = "";
     results();
-    dialog.showModal();
+    showModal(dialog);
   }
   function results() {
     const query = q<HTMLInputElement>("[data-lab-search]")
@@ -236,6 +472,8 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
       (s) =>
         !s.empty &&
         (!onlySaved || saved.includes(s.key)) &&
+        (Number(q("[data-lab-modal=search]").dataset.family || 0) === 0 ||
+          s.family === Number(q("[data-lab-modal=search]").dataset.family)) &&
         `${s.code} ${s.title} ${s.english} ${families[s.family]}`
           .toLocaleLowerCase()
           .includes(query),
@@ -248,7 +486,11 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
           name = document.createElement("span");
         code.textContent = item.code;
         name.textContent = item.title;
-        button.append(code, name);
+        const category = document.createElement("span"),
+          access = document.createElement("span");
+        category.textContent = item.category;
+        access.textContent = "OPEN ↗";
+        button.append(code, name, category, access);
         return button;
       }),
     );
@@ -274,7 +516,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
       if (disposed) return;
       const p = Math.min(
         1,
-        (now - start) / (state.preferences.motion ? 3200 : 1),
+        (now - start) / (motionAllowed(state.preferences, "boot") ? 3200 : 1),
       );
       overlay.style.setProperty("--boot", String(p));
       const message =
@@ -295,19 +537,49 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
   const click = (event: Event) => {
     const target = event.target as Element;
     if (target.closest("[data-lab-close]")) {
-      target.closest("dialog")?.close();
+      const dialog = target.closest<HTMLDialogElement>("dialog");
+      if (dialog) closeModal(dialog);
+      return;
+    }
+    const tick = target.closest<HTMLElement>("[data-lab-tick]");
+    if (tick) {
+      const count = archiveColumns(state.items)[
+        wrap(state.lane, archiveColumns(state.items).length)
+      ].items.length;
+      const row =
+        Number(tick.dataset.labTick) +
+        Math.round((state.row - Number(tick.dataset.labTick)) / count) * count;
+      select(state.lane, row);
       return;
     }
     const work = target.closest<HTMLElement>("[data-lab-work-index]");
     if (work) {
       state.items = allItems;
       root.dataset.category = "0";
-      select(0, Number(work.dataset.labWorkIndex), true);
+      const cell = locateItem(
+        allItems,
+        allItems[Number(work.dataset.labWorkIndex)].key,
+      );
+      select(cell.lane, cell.row, true);
       return;
     }
     const family = target.closest<HTMLElement>("[data-lab-family-index]");
     if (family) {
       const selected = Number(family.dataset.labFamilyIndex);
+      const dialog = family.closest<HTMLDialogElement>("dialog");
+      if (dialog) {
+        dialog.dataset.family = String(selected);
+        dialog
+          .querySelectorAll<HTMLElement>("[data-lab-family-index]")
+          .forEach((button) =>
+            button.setAttribute(
+              "aria-pressed",
+              String(Number(button.dataset.labFamilyIndex) === selected),
+            ),
+          );
+        results();
+        return;
+      }
       root.dataset.category = String(selected);
       const filtered = allItems.filter(
         (item) => selected === 0 || item.family === selected,
@@ -326,11 +598,11 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
       q<HTMLDialogElement>("[data-lab-modal=search]").close();
       state.items = allItems;
       root.dataset.category = "0";
-      select(
-        0,
-        allItems.findIndex((item) => item.id === id),
-        true,
+      const cell = locateItem(
+        allItems,
+        allItems.find((item) => item.id === id)!.key,
       );
+      select(cell.lane, cell.row, true);
       return;
     }
     const selectedTab = target.closest<HTMLElement>("[data-lab-tab]");
@@ -353,11 +625,33 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
       case "open":
         mode("detail");
         break;
+      case "close-inspect":
+        mode("detail");
+        q('[data-lab-action="inspect"]').focus({ preventScroll: true });
+        break;
+      case "clear":
+        state.frosted = false;
+        sync();
+        break;
+      case "frosted":
+        state.frosted = true;
+        sync();
+        break;
+      case "assemble":
+        state.exploded = false;
+        sync();
+        break;
       case "inspect":
         mode("inspect");
         break;
       case "back":
         mode("browse");
+        break;
+      case "previous-column":
+        stepColumn(-1);
+        break;
+      case "next-column":
+        stepColumn(1);
         break;
       case "previous":
         select(state.lane, state.row - 1);
@@ -372,10 +666,10 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
         search(true);
         break;
       case "settings":
-        q<HTMLDialogElement>("[data-lab-modal=settings]").showModal();
+        showModal(q<HTMLDialogElement>("[data-lab-modal=settings]"));
         break;
       case "save": {
-        const id = itemAt(state.items, state.row + state.lane).key;
+        const id = itemAtCell(state.items, state.lane, state.row).key;
         saved = saved.includes(id)
           ? saved.filter((v) => v !== id)
           : [...saved, id];
@@ -395,6 +689,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
         sync();
         break;
       case "reset":
+        if (state.mode === "inspect") scene?.resetViewer();
         state.rotation = { x: 0.08, y: 0.12 };
         state.pan = { x: 0, y: 0 };
         state.zoom = 1;
@@ -416,7 +711,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
           });
         break;
       case "export": {
-        const item = itemAt(state.items, state.row + state.lane),
+        const item = itemAtCell(state.items, state.lane, state.row),
           blob = new Blob(
             [
               `${item.code} / ${item.title}\n${item.english}\n\n${item.description}\n\nOutDesign — 作品資料。\n${q("[data-lab-log]").textContent}`,
@@ -446,11 +741,21 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
     "change",
     (e) => {
       const input = e.target as HTMLInputElement;
+      if (input.dataset.labEffect) {
+        state.preferences.effects[input.dataset.labEffect as MotionKey] =
+          input.checked;
+        persist();
+        sync();
+        return;
+      }
       const setting = input.dataset.labSetting;
       if (!setting) return;
       state.preferences = normalizePreferences(
         {
           ...state.preferences,
+          ...(setting === "motion"
+            ? { motionPreset: input.checked ? "full" : "reduced" }
+            : {}),
           [setting]:
             input.type === "checkbox"
               ? input.checked
@@ -512,7 +817,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
     }
     if (e.key === "Escape") {
       if (!q(".lab-boot").hidden) skipBoot();
-      else mode("browse");
+      else mode(state.mode === "inspect" ? "detail" : "browse");
       return;
     }
     if (e.key === "Enter" && e.target === stage) {
@@ -536,12 +841,19 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
       return;
     e.preventDefault();
     if (state.mode === "browse") {
-      select(
-        state.lane +
-          (e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0),
-        state.row + (e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0),
-      );
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight")
+        stepColumn(e.key === "ArrowLeft" ? -1 : 1);
+      else
+        select(
+          state.lane,
+          state.row +
+            (e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0),
+        );
     } else {
+      if (state.mode === "inspect") {
+        scene?.viewerKey(e.key);
+        return;
+      }
       const step = e.shiftKey ? 0.2 : 0.08;
       if (e.key.startsWith("Arrow")) {
         state.pan.x +=
@@ -561,6 +873,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
     }
   };
   root.addEventListener("keydown", keyboard, { signal: abort.signal });
+  const archiveDrag = new ArchiveDrag();
   let drag: {
     id: number;
     x: number;
@@ -568,80 +881,105 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
     moved: boolean;
     rotation: { x: number; y: number };
     pan: { x: number; y: number };
-    t: number;
-    vx: number;
-    vy: number;
-    lastX: number;
-    lastY: number;
     shift: boolean;
+    start: { lane: number; row: number };
   } | null = null;
   const pointers = new Map<number, { x: number; y: number }>();
   let pinch = 0,
     pinchZoom = 1;
   stage.addEventListener(
     "pointerdown",
-    (e) => {
-      if ((e.target as Element).closest("button") || e.button > 1) return;
+    (event) => {
+      if (state.mode === "inspect" && event.target instanceof HTMLCanvasElement)
+        return;
+      if ((event.target as Element).closest("button") || event.button > 1)
+        return;
       cancelAnimationFrame(coastFrame);
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      stage.setPointerCapture(e.pointerId);
+      scene?.clearHover();
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      stage.setPointerCapture(event.pointerId);
       stage.focus({ preventScroll: true });
       if (pointers.size === 2) {
-        const p = [...pointers.values()];
-        pinch = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+        const points = [...pointers.values()];
+        pinch = Math.hypot(
+          points[0].x - points[1].x,
+          points[0].y - points[1].y,
+        );
         pinchZoom = state.zoom;
+        if (drag) drag.moved = true;
+        state.track = null;
         return;
       }
+      const start = scene?.position() ?? { lane: state.lane, row: state.row };
+      archiveDrag.start(
+        event.clientX,
+        event.clientY,
+        scene?.projection() ?? {
+          lane: { x: -110, y: 0 },
+          row: { x: 0, y: -75 },
+        },
+        event.timeStamp,
+      );
       drag = {
-        id: e.pointerId,
-        x: e.clientX,
-        y: e.clientY,
-        lastX: e.clientX,
-        lastY: e.clientY,
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
         moved: false,
         rotation: { ...state.rotation },
         pan: { ...state.pan },
-        t: performance.now(),
-        vx: 0,
-        vy: 0,
-        shift: e.shiftKey || e.button === 1,
+        shift: event.shiftKey || event.button === 1,
+        start,
       };
-      e.preventDefault();
+      event.preventDefault();
     },
     { signal: abort.signal },
   );
   stage.addEventListener(
     "pointermove",
-    (e) => {
-      if (!pointers.has(e.pointerId)) return;
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    (event) => {
+      if (!pointers.has(event.pointerId)) {
+        if (event.pointerType === "mouse" && !drag) {
+          const hovered = scene?.hover(event.clientX, event.clientY);
+          const label = q("[data-lab-hover]");
+          label.hidden = !hovered;
+          if (hovered) label.textContent = `${hovered.code} / ${hovered.title}`;
+        }
+        return;
+      }
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (pointers.size === 2) {
-        const p = [...pointers.values()];
+        if (state.mode === "browse") return;
+        const points = [...pointers.values()];
         state.zoom = Math.max(
           0.65,
           Math.min(
             1.8,
-            (pinchZoom * Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y)) /
+            (pinchZoom *
+              Math.hypot(
+                points[0].x - points[1].x,
+                points[0].y - points[1].y,
+              )) /
               Math.max(1, pinch),
           ),
         );
         sync();
         return;
       }
-      if (!drag || drag.id !== e.pointerId) return;
-      const dx = e.clientX - drag.x,
-        dy = e.clientY - drag.y,
-        now = performance.now();
+      if (!drag || drag.id !== event.pointerId) return;
+      const dx = event.clientX - drag.x,
+        dy = event.clientY - drag.y;
       drag.moved ||= Math.hypot(dx, dy) > 7;
-      drag.vx = ((e.clientX - drag.lastX) / Math.max(8, now - drag.t)) * 1000;
-      drag.vy = ((e.clientY - drag.lastY) / Math.max(8, now - drag.t)) * 1000;
-      drag.lastX = e.clientX;
-      drag.lastY = e.clientY;
-      drag.t = now;
-      if (drag.moved) {
-        if (state.mode === "browse")
-          state.offset = { x: -dx / 110, y: -dy / 75 };
-        else if (drag.shift)
+      if (state.mode === "browse") {
+        for (const sample of event.getCoalescedEvents?.() ?? [])
+          archiveDrag.move(sample.clientX, sample.clientY, sample.timeStamp);
+        archiveDrag.move(event.clientX, event.clientY, event.timeStamp);
+        if (archiveDrag.active)
+          navigatePlane({
+            lane: drag.start.lane + archiveDrag.value.lane,
+            row: drag.start.row + archiveDrag.value.row,
+          });
+      } else if (drag.moved) {
+        if (drag.shift)
           state.pan = {
             x: Math.max(-2, Math.min(2, drag.pan.x + dx / 180)),
             y: Math.max(-2, Math.min(2, drag.pan.y - dy / 180)),
@@ -649,92 +987,126 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
         else
           state.rotation = {
             x: Math.max(-1.3, Math.min(1.3, drag.rotation.x + dy / 180)),
-            y: drag.rotation.y + dx / 160,
+            y: Math.max(-0.8, Math.min(0.8, drag.rotation.y + dx / 250)),
           };
         scene?.invalidate();
       }
     },
     { signal: abort.signal },
   );
-  const endPointer = (e: PointerEvent, commit = true) => {
-    pointers.delete(e.pointerId);
+  const endPointer = (event: PointerEvent, commit = true) => {
+    pointers.delete(event.pointerId);
     if (pointers.size) {
       if (drag) drag.moved = true;
       return;
     }
-    const d = drag;
+    const previous = drag;
     drag = null;
-    if (!d) return;
+    if (!previous) return;
     if (!commit) {
-      state.offset = { x: 0, y: 0 };
+      state.track = null;
       sync();
       return;
     }
-    if (!d.moved) {
-      scene?.pick(e.clientX, e.clientY, false);
+    if (!previous.moved) {
+      scene?.pick(event.clientX, event.clientY, false);
       return;
     }
-    if (state.mode === "browse") {
-      let vx =
-          state.preferences.motion && performance.now() - d.t < 80
-            ? Math.max(-8, Math.min(8, -d.vx / 110))
-            : 0,
-        vy =
-          state.preferences.motion && performance.now() - d.t < 80
-            ? Math.max(-10, Math.min(10, -d.vy / 75))
-            : 0,
-        last = performance.now(),
-        start = last;
-      const coast = (now: number) => {
-        const dt = Math.min(0.04, (now - last) / 1000);
-        last = now;
-        state.offset.x += vx * dt;
-        state.offset.y += vy * dt;
-        vx *= Math.exp(-dt * 7);
-        vy *= Math.exp(-dt * 7);
-        scene?.invalidate();
-        if (now - start < 650 && Math.hypot(vx, vy) > 0.15)
-          coastFrame = requestAnimationFrame(coast);
-        else
-          select(
-            state.lane + Math.round(state.offset.x),
-            state.row + Math.round(state.offset.y),
-          );
-      };
-      coastFrame = requestAnimationFrame(coast);
-    }
+    if (state.mode !== "browse") return;
+    const position = state.track ??
+      scene?.position() ?? { lane: state.lane, row: state.row };
+    const velocity = archiveDrag.releaseVelocity(
+      event.timeStamp,
+      !motionAllowed(state.preferences, "dragMomentum"),
+    );
+    const momentum = new ArchivePlaneMomentum(position, velocity);
+    let last = performance.now();
+    const coast = (now: number) => {
+      momentum.step(Math.min(0.05, Math.max(0, (now - last) / 1000)));
+      last = now;
+      navigatePlane(momentum.value);
+      root.dataset.navigation = momentum.phase;
+      if (momentum.phase !== "idle") coastFrame = requestAnimationFrame(coast);
+      else {
+        state.track = null;
+        select(Math.round(momentum.value.lane), Math.round(momentum.value.row));
+        root.dataset.navigation = "idle";
+      }
+    };
+    coastFrame = requestAnimationFrame(coast);
   };
-  stage.addEventListener("pointerup", (e) => endPointer(e), {
+  stage.addEventListener("pointerup", (event) => endPointer(event), {
     signal: abort.signal,
   });
-  stage.addEventListener("pointercancel", (e) => endPointer(e, false), {
+  stage.addEventListener("pointercancel", (event) => endPointer(event, false), {
     signal: abort.signal,
   });
   stage.addEventListener(
-    "dblclick",
-    (e) => {
-      if (!(e.target as Element).closest("button")) mode("detail");
+    "pointerleave",
+    () => {
+      scene?.clearHover();
+      q("[data-lab-hover]").hidden = true;
     },
     { signal: abort.signal },
   );
-  let wheelAt = 0;
+  stage.addEventListener(
+    "dblclick",
+    (event) => {
+      if (!(event.target as Element).closest("button")) mode("detail");
+    },
+    { signal: abort.signal },
+  );
+  let wheelAt = 0,
+    wheelTotal = 0,
+    wheelAxis = "row";
   stage.addEventListener(
     "wheel",
-    (e) => {
-      if ((e.target as Element).closest("button")) return;
-      e.preventDefault();
-      if (state.mode !== "browse" || e.ctrlKey || e.altKey) {
+    (event) => {
+      if (state.mode === "inspect") return;
+      if ((event.target as Element).closest("button")) return;
+      event.preventDefault();
+      if (state.mode !== "browse" || event.ctrlKey || event.altKey) {
         state.zoom = Math.max(
           0.65,
-          Math.min(1.8, state.zoom * Math.exp(-e.deltaY * 0.001)),
+          Math.min(1.8, state.zoom * Math.exp(-event.deltaY * 0.001)),
         );
         sync();
-      } else if (performance.now() - wheelAt > 180) {
-        wheelAt = performance.now();
-        select(
-          state.lane + (e.shiftKey ? Math.sign(e.deltaY) : 0),
-          state.row + (!e.shiftKey ? Math.sign(e.deltaY) : 0),
-        );
+        return;
+      }
+      if (drag) return;
+      const axis =
+        event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)
+          ? "lane"
+          : "row";
+      const delta = Math.max(
+        -300,
+        Math.min(
+          300,
+          (axis === "lane" ? event.deltaX || event.deltaY : event.deltaY) *
+            (event.deltaMode === 1
+              ? 40
+              : event.deltaMode === 2
+                ? stage.clientHeight
+                : 1),
+        ),
+      );
+      const now = performance.now();
+      if (
+        now - wheelAt > 180 ||
+        Math.sign(delta) !== Math.sign(wheelTotal) ||
+        wheelAxis !== axis
+      )
+        wheelTotal = 0;
+      wheelAt = now;
+      wheelAxis = axis;
+      wheelTotal += delta;
+      const steps = Math.min(3, Math.floor(Math.abs(wheelTotal) / 100));
+      if (!steps) return;
+      const direction = Math.sign(wheelTotal);
+      wheelTotal -= direction * steps * 100;
+      for (let i = 0; i < steps; i++) {
+        if (axis === "lane") stepColumn(direction);
+        else select(state.lane, state.row + direction);
       }
     },
     { passive: false, signal: abort.signal },
@@ -790,6 +1162,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
       drag = null;
       pointers.clear();
       state.offset = { x: 0, y: 0 };
+      state.track = null;
       cancelAnimationFrame(coastFrame);
       scene?.invalidate();
     },
@@ -806,7 +1179,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
   media.addEventListener(
     "change",
     () => {
-      if (media.matches) {
+      if (media.matches && state.preferences.motionPreset !== "full") {
         state.preferences.motion = false;
         skipBoot();
         sync();
@@ -821,6 +1194,10 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
     clearInterval(timer);
     [bootFrame, coastFrame, gamepadFrame].forEach(cancelAnimationFrame);
     animations.forEach((a) => a.cancel());
+    rollingText.forEach((reel) => reel.destroy());
+    rollingNumbers.forEach((reel) => reel.destroy());
+    surfaces.forEach((surface) => surface.dispose());
+    modalSurfaces.forEach((surface) => surface.dispose());
     root
       .querySelectorAll<HTMLDialogElement>("dialog[open]")
       .forEach((d) => d.close());
@@ -831,6 +1208,7 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
   live.set(root, dispose);
   sync();
   tab(0);
+  stage.focus({ preventScroll: true });
   try {
     const { createLabScene } = await import("./scene");
     if (disposed || !root.isConnected) {
@@ -838,13 +1216,27 @@ export async function initWorkLab(root: HTMLElement): Promise<() => void> {
       return dispose;
     }
     scene = createLabScene(stage, state, select, (value) => {
-      root.style.setProperty("--lab-reveal", String(value));
-      root.dataset.revealing = String(state.mode !== "browse" && value < 1);
+      root.style.setProperty(
+        "--lab-reveal",
+        String(motionAllowed(state.preferences, "documentReveal") ? value : 1),
+      );
+      root.dataset.revealing = String(
+        state.mode !== "browse" &&
+          motionAllowed(state.preferences, "documentReveal") &&
+          value < 1,
+      );
     });
     q("[data-lab-render-status]").textContent = "WEBGL / LIVE";
     root.dataset.engine = "webgl";
     sync();
-    if (state.preferences.motion) boot();
+    const hash = location.hash.slice(1);
+    if (/^project-[0-9a-f-]{36}$/i.test(hash)) {
+      const selected = allItems.find((item) => item.key === hash.slice(8));
+      if (selected) {
+        const cell = locateItem(allItems, selected.key);
+        select(cell.lane, cell.row, true);
+      }
+    } else if (motionAllowed(state.preferences, "boot")) boot();
   } catch {
     root.dataset.engine = "fallback";
     stage.dataset.ready = "fallback";

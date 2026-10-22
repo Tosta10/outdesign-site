@@ -2,6 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   createLabItems,
+  archiveColumns,
+  itemAtCell,
+  locateItem,
+  ARCHIVE_LAYOUT,
   itemAt,
   normalizePreferences,
   pulse,
@@ -63,4 +67,75 @@ test("motion envelopes remain bounded and preferences honor system motion settin
   );
   assert.equal(normalizePreferences({ volume: 5 }).volume, 0.3);
   assert.equal(normalizePreferences({ quality: "invalid" }).quality, "medium");
+});
+
+test("archive columns keep independent work rows and wrap without diagonal index collisions", () => {
+  const projects = Array.from({ length: 6 }, (_, i) => ({
+    id: crypto.randomUUID(),
+    title: `Work ${i}`,
+    category: i < 4 ? "設計" : "開發",
+    year: "2026",
+    image: "",
+    alt: "",
+    description: "",
+    url: "",
+  }));
+  const items = createLabItems(projects);
+  assert.equal(archiveColumns(items).length, 2);
+  assert.equal(itemAtCell(items, 0, 3).key, projects[3].id);
+  assert.equal(itemAtCell(items, 1, 3).key, projects[5].id);
+  assert.equal(itemAtCell(items, -1, -1).key, projects[5].id);
+  assert.equal(itemAtCell(items, 2, 4).key, projects[0].id);
+  assert.deepEqual(locateItem(items, projects[4].id), { lane: 1, row: 0 });
+  assert.ok(
+    ARCHIVE_LAYOUT.rowGap > ARCHIVE_LAYOUT.depth,
+    "Upright cassettes never occupy neighboring depth slots",
+  );
+  assert.ok(ARCHIVE_LAYOUT.columnGap > ARCHIVE_LAYOUT.width);
+});
+
+test("projected drag follows both camera tracks and preserves a diagonal release", async () => {
+  const { ArchiveDrag, ArchivePlaneMomentum } =
+    await import("../src/lib/work-lab/archive-drag.ts");
+  const drag = new ArchiveDrag();
+  drag.start(0, 0, { lane: { x: -180, y: -80 }, row: { x: 12, y: -16 } }, 0);
+  drag.move(-78, -56, 40);
+  drag.move(-156, -112, 80);
+  assert.ok(Math.abs(drag.value.lane - 1) < 0.00001);
+  assert.ok(Math.abs(drag.value.row - 2) < 0.00001);
+  const velocity = drag.releaseVelocity(85, false);
+  assert.ok(velocity.lane > 0 && velocity.row > velocity.lane);
+  const momentum = new ArchivePlaneMomentum({ lane: 1, row: 2 }, velocity);
+  momentum.step(0.02);
+  assert.ok(momentum.value.lane > 1 && momentum.value.row > 2);
+  for (let i = 0; i < 800; i++) momentum.step(0.016);
+  assert.equal(momentum.phase, "idle");
+  assert.equal(momentum.value.lane, Math.round(momentum.value.lane));
+  assert.equal(momentum.value.row, Math.round(momentum.value.row));
+});
+test("source spring transition is continuous, retains velocity and converges in either direction", async () => {
+  const { damp } = await import("../src/lib/work-lab/motion.ts");
+  const spring = { value: 0, velocity: 0 };
+  damp(spring, 1, 3.7, 0.016);
+  assert.ok(spring.value > 0 && spring.value < 0.02);
+  for (let i = 0; i < 20; i++) damp(spring, 1, 3.7, 0.016);
+  assert.ok(spring.value > 0.2 && spring.value < 0.5);
+  const velocity = spring.velocity;
+  damp(spring, -1, 3.7, 0.016);
+  assert.ok(spring.velocity < velocity);
+  for (let i = 0; i < 250; i++) damp(spring, -1, 3.7, 0.016);
+  assert.ok(Math.abs(spring.value + 1) < 0.0001);
+});
+test("full motion can be explicitly selected while per-effect switches remain independent", () => {
+  const full = normalizePreferences(
+    { motionPreset: "full", effects: { idleWave: false } },
+    true,
+  );
+  assert.equal(full.motion, true);
+  assert.equal(full.effects.idleWave, false);
+  assert.equal(full.effects.selectionWave, true);
+  assert.equal(
+    normalizePreferences({ motionPreset: "reduced" }, false).motion,
+    false,
+  );
 });

@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@astrojs/react": "7.1.0",
+    "@kitlangton/rolling-number": "0.4.1",
     "astro": "7.4.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",

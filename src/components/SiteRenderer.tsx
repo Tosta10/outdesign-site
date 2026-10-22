@@ -6,6 +6,7 @@ import {
 import { elementProps } from "../lib/presentation";
 import { assetUrl } from "../lib/content";
 import { CanvasPanels } from "./CanvasPanels";
+import { WorkLab } from "./WorkLab";
 import { Icon } from "./Icon";
 import { EditableText } from "./EditableText";
 import { SourceValue } from "./SourceValue";
@@ -107,6 +108,73 @@ export function SiteRenderer({
     ["about", "關於", "About & contact"],
     ["resources", "資源", "Resources"],
   ] as const;
+  if (page === "work")
+    return (
+      <div className="site page-work" data-editing={editing} style={styles}>
+        <a className="skip-link" href="#main">
+          跳至主要內容
+        </a>
+        <main id="main">
+          <section
+            id="work"
+            className="work-section"
+            data-layout="section:work"
+            {...elementProps(c, "work", editing)}
+            data-edit={editing ? "projects" : undefined}
+          >
+            <WorkLab projects={c.projects} imageUrl={img} homeUrl={url()} />
+          </section>
+          <div className="lab-author-overlay">{panels}</div>
+        </main>
+        <dialog
+          className="nav-drawer"
+          id="site-navigation"
+          aria-label="網站選單"
+        >
+          <div className="drawer-top">
+            <span>OUTDESIGN / MENU</span>
+            <button data-close-dialog aria-label="關閉選單">
+              <Icon name="close" />
+            </button>
+          </div>
+          <nav aria-label="主要導覽">
+            {links
+              .filter(([key]) => key !== "journal" || c.settings.showNotes)
+              .map(([key, label, english], i) => (
+                <a
+                  key={key}
+                  data-page-target={key}
+                  href={url(key === "home" ? "" : key)}
+                  aria-current={key === page ? "page" : undefined}
+                >
+                  <span className="nav-index">0{i + 1}</span>
+                  <span>
+                    {label}
+                    <small>{english}</small>
+                  </span>
+                  <Icon name="diagonal" />
+                </a>
+              ))}
+          </nav>
+        </dialog>
+        {!editing &&
+          c.workspace?.scripts?.some(
+            (script) => script.page === page && script.enabled,
+          ) && (
+            <script
+              type="application/json"
+              data-site-logic
+              dangerouslySetInnerHTML={{
+                __html: JSON.stringify(
+                  c.workspace.scripts.filter(
+                    (script) => script.page === page && script.enabled,
+                  ),
+                ).replaceAll("<", "\\u003c"),
+              }}
+            />
+          )}
+      </div>
+    );
   return (
     <div
       className={`site theme-${c.settings.theme === "verdant" ? "verdant" : "prism"} page-${page}`}
@@ -340,21 +408,14 @@ export function SiteRenderer({
             >
               <p className="eyebrow">
                 OUTDESIGN /{" "}
-                {page === "work"
-                  ? "SELECTED WORK"
-                  : page === "journal"
-                    ? "JOURNAL"
-                    : page === "resources"
-                      ? "RESOURCES"
-                      : "ABOUT"}
+                {page === "journal"
+                  ? "JOURNAL"
+                  : page === "resources"
+                    ? "RESOURCES"
+                    : "ABOUT"}
               </p>
               <h1>
-                {page === "work" ? (
-                  <>
-                    {text("intro.work.first")}
-                    <em>{text("intro.work.second")}</em>
-                  </>
-                ) : page === "journal" ? (
+                {page === "journal" ? (
                   <>
                     {text("intro.journal.first")}
                     <em>{text("intro.journal.second")}</em>
@@ -373,13 +434,7 @@ export function SiteRenderer({
               </h1>
               <p>{text(`intro.${page}.description`)} </p>
               <span className="page-intro-number">
-                {page === "work"
-                  ? "02"
-                  : page === "journal"
-                    ? "03"
-                    : page === "resources"
-                      ? "05"
-                      : "04"}
+                {page === "journal" ? "03" : page === "resources" ? "05" : "04"}
               </span>
             </div>
           )}

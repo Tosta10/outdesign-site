@@ -25,6 +25,7 @@ const child = spawn(
   [
     join("node_modules/astro", astro.bin.astro),
     "dev",
+    "--ignore-lock",
     "--host",
     "127.0.0.1",
     "--port",
