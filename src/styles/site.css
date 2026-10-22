@@ -1554,15 +1554,15 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
+    html:not([data-site-motion="full"]) *,
+    html:not([data-site-motion="full"]) *::before,
+    html:not([data-site-motion="full"]) *::after {
       scroll-behavior: auto !important;
       animation: none !important;
       transition: none !important;
     }
-    .mission-card,
-    .mission-card:hover {
+    .site:not([data-motion="full"]) .mission-card,
+    .site:not([data-motion="full"]) .mission-card:hover {
       transform: none;
     }
   }

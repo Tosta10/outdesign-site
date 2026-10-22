@@ -2,11 +2,13 @@ import { memo, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { SiteRenderer, type SitePage } from "../components/SiteRenderer";
 import type { SiteContent } from "../../supabase/functions/_shared/schema";
+import { notifyRenderVisibility } from "../lib/render-visibility";
 
 /** An isolated, passive viewport. Run preview opens the interactive scene separately. */
 export const MiniPreview = memo(function MiniPreview(props: {
   content: SiteContent; page: SitePage; api: string; base: string;
   assets: Record<string, string>; onRun: () => void;
+  suspended?: boolean;
 }) {
   const [doc, setDoc] = useState<Document | null>(null);
   const [width, setWidth] = useState(1280);
@@ -14,14 +16,19 @@ export const MiniPreview = memo(function MiniPreview(props: {
   const [available, setAvailable] = useState(300);
   const [open, setOpen] = useState(true);
   const viewport = useRef<HTMLDivElement>(null);
+  useEffect(() => { notifyRenderVisibility(); }, [props.suspended]);
   useEffect(() => {
     if (!viewport.current) return;
-    const observer = new ResizeObserver(([entry]) => setAvailable(entry.contentRect.width));
+    let frame = 0;
+    const observer = new ResizeObserver(([entry]) => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setAvailable(entry.contentRect.width));
+    });
     observer.observe(viewport.current);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, [open]);
   const scale = available / width * zoom;
-  return <section className="logic-mini-preview" aria-label="積木即時預覽區">
+  return <section className="logic-mini-preview" aria-label="積木即時預覽區" data-render-suspended={props.suspended || undefined}>
     <div className="mini-preview-heading">
       <button aria-expanded={open} onClick={() => setOpen(!open)}>即時預覽 {open ? "▾" : "▸"}</button>
       <button onClick={props.onRun} title="開啟互動執行預覽">▶ 執行</button>

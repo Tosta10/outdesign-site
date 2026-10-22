@@ -1,7 +1,11 @@
 import type { WorkLabConfig } from "../../../supabase/functions/_shared/work-lab-config.ts";
 import * as T from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { disposeOrbitControls } from './orbit-lifetime';
+import { usesSoftwareRenderer } from './renderer-probe';
 import { ViewerCameraMotion } from "./viewer-camera";
+import { FrameFieldCache } from "./field-cache";
+import { renderSuspended } from "../render-visibility";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
@@ -73,9 +77,10 @@ export function createLabScene(
     canvas.after(previewSurface);
   }
   let previewCaptured = -Infinity;
+  const softwareHint = usesSoftwareRenderer();
   const renderer = new T.WebGLRenderer({
     canvas,
-    antialias: true,
+    antialias: !softwareHint,
     alpha: true,
     preserveDrawingBuffer: thumbnail,
     powerPreference: thumbnail ? "low-power" : "high-performance",
@@ -85,11 +90,18 @@ export function createLabScene(
   const rendererName = debug
     ? String(gl.getParameter(debug.UNMASKED_RENDERER_WEBGL))
     : "";
-  const software =
+  const software = softwareHint ||
     /SwiftShader|llvmpipe|softpipe|software|Microsoft Basic Render/i.test(
       rendererName,
     );
   host.dataset.softwareRenderer = String(software);
+  host.dataset.antialias = String(gl.getContextAttributes()?.antialias);
+  const rendererLookups = new Set<T.Texture>();
+  const captureLookups = (material: T.Material) => {
+    const properties = renderer.properties.get(material) as { uniforms?: Record<string, { value?: unknown }> };
+    const lookup = properties.uniforms?.dfgLUT?.value;
+    if (lookup instanceof T.Texture) rendererLookups.add(lookup);
+  };
   const qualityNote = host
     .closest<HTMLElement>("[data-work-lab]")
     ?.querySelector<HTMLElement>("[data-lab-quality-status]");
@@ -105,6 +117,7 @@ export function createLabScene(
     camera = new T.PerspectiveCamera(25, 1, 0.1, 160);
   const controlCamera = camera.clone();
   const controls = new OrbitControls(controlCamera, canvas);
+  const orbitEventRoot = canvas.getRootNode();
   controls.enabled = false;
   controls.enableDamping = false;
   controls.rotateSpeed = 0.65;
@@ -125,6 +138,9 @@ export function createLabScene(
   const pmrem = new T.PMREMGenerator(renderer),
     room = new RoomEnvironment();
   const environment = pmrem.fromScene(room, 0.04);
+  room.traverse(object => {
+    if (object instanceof T.Mesh) [object.material].flat().forEach(captureLookups);
+  });
   scene.environment = environment.texture;
   room.dispose();
   pmrem.dispose();
@@ -159,6 +175,16 @@ export function createLabScene(
     dummy = new T.Object3D();
   const cellMatrix = new T.Matrix4(),
     componentMatrix = new T.Matrix4();
+  const fieldSamples = new FrameFieldCache(layout.lanes, layout.rows);
+  const edgeTransform = new T.Matrix4().makeTranslation(0, layout.height / 2 + .007, 0);
+  const artTransform = new T.Matrix4();
+  const pinTransforms = [-1.57, 1.57].map(x => new T.Matrix4().makeRotationX(Math.PI / 2).setPosition(x, 1.33, .135));
+  const viewFrustum = new T.Frustum(), clipMatrix = new T.Matrix4(), viewDirection = new T.Vector3();
+  const cellSphere = new T.Sphere(new T.Vector3(), Math.hypot(layout.width, layout.height, layout.depth) / 2 + .2);
+  const cellOffsets = Array.from({ length: count }, (_, index) => ({
+    x: Math.floor(index / layout.rows) - Math.floor(layout.lanes / 2),
+    z: index % layout.rows - Math.floor(layout.rows / 2),
+  }));
   const shell = software
     ? new T.MeshLambertMaterial({ color: 0xe1dcd1 })
     : new T.MeshStandardMaterial({
@@ -179,7 +205,9 @@ export function createLabScene(
       "#include <color_fragment>\ndiffuseColor.rgb *= mix(vec3(0.68,0.64,0.56),vec3(1.0),smoothstep(0.0,1.0,panelHeight));",
     );
   };
-  const topMaterial = new T.MeshStandardMaterial({ color: 0x969894, metalness: .08, roughness: .72 });
+  const topMaterial = software
+    ? new T.MeshLambertMaterial({ color: 0x969894 })
+    : new T.MeshStandardMaterial({ color: 0x969894, metalness: .08, roughness: .72 });
   const body = new T.InstancedMesh(
     new T.BoxGeometry(layout.width, layout.height, layout.depth),
     shell,
@@ -192,7 +220,7 @@ export function createLabScene(
   );
   const pins = new T.InstancedMesh(
     new T.CylinderGeometry(0.028, 0.028, 0.025, 8),
-    new T.MeshStandardMaterial({
+    software ? new T.MeshPhongMaterial({ color: 0x8b8d88, specular: 0x666666, shininess: 32 }) : new T.MeshStandardMaterial({
       color: 0x8b8d88,
       roughness: 0.32,
       metalness: 0.65,
@@ -375,8 +403,8 @@ export function createLabScene(
       renderer.setPixelRatio(
         Math.min(
           devicePixelRatio,
-          thumbnail ? .35 : software
-            ? 0.5
+          thumbnail ? (software ? .22 : .35) : software
+            ? 0.3
             : quality === "high"
               ? 1.75
               : quality === "low"
@@ -423,7 +451,13 @@ export function createLabScene(
       shell.color.copy(theme === "light" ? shellPaper : shellNight);
     }
   }
-  const observer = new ResizeObserver(resize);
+  let resizeFrame = 0;
+  const observer = new ResizeObserver(() => {
+    if (!resizeFrame) resizeFrame = requestAnimationFrame(() => {
+      resizeFrame = 0;
+      if (alive) resize();
+    });
+  });
   observer.observe(host);
   const intersection = new IntersectionObserver(([entry]) => {
     visible = entry.isIntersecting;
@@ -433,12 +467,12 @@ export function createLabScene(
   });
   intersection.observe(host);
   function draw(now: number) {
-    if (!alive || lost || document.hidden || !visible) {
+    if (!alive || lost || document.hidden || !visible || renderSuspended(host)) {
       stopRendering();
       return;
     }
     const dt = Math.min(1, Math.max(0.001, (now - last) / 1000));
-    if (quality === "low" && now - lastDraw < 32) return;
+    if (now - lastDraw < (software ? 24 : thumbnail ? 80 : quality === "low" ? 32 : 0)) return;
     last = now;
     lastDraw = now;
     configure();
@@ -647,14 +681,8 @@ export function createLabScene(
       );
     };
     // Cache the source's shared wave surface for both height and tilt.
-    const fieldCache = new Map<number, Map<number, number>>();
-    const field = (r: number, l: number) => {
-      let column = fieldCache.get(l);
-      if (!column) { column = new Map(); fieldCache.set(l, column); }
-      let value = column.get(r);
-      if (value === undefined) { value = calculateField(r, l); column.set(r, value); }
-      return value;
-    };
+    fieldSamples.begin(lane, row);
+    const field = (r: number, l: number) => fieldSamples.read(r, l, calculateField);
     host.dataset.breathing = String(motionAllowed(state.preferences, "idleWave") ? idleGain * p.idleAmplitude : 0);
     const hoverKey = hoverCell ? `${hoverCell.lane}:${hoverCell.row}` : "";
     if (hoverKey && !hoverLifts.has(hoverKey)) hoverLifts.set(hoverKey, 0);
@@ -765,64 +793,7 @@ export function createLabScene(
     [body, edges, pins, artwork].forEach(
       (mesh) => (mesh.visible = arrayVisible),
     );
-    const columns = archiveColumns(state.items);
-    let index = 0;
-    for (let x = -4; x <= 4; x++)
-      for (let z = -32; z <= 32; z++) {
-        const l = Math.floor(lane) + x,
-          r = Math.floor(row) + z;
-        cells[index] = { lane: l, row: r };
-        const isSelected =
-          (model.object.visible && l === state.lane && r === state.row) ||
-          outgoing.some((old) => old.lane === l && old.row === r);
-        const px = (l - lane) * layout.columnGap,
-          py = field(r, l) + hoverLift(l, r) + (l === state.lane && r === state.row && !model.object.visible ? lift.value : retiringLifts.get(`${l}:${r}`)?.value || 0),
-          pz = (r - row) * layout.rowGap;
-        const tilt =
-          (field(r + 0.5, l) - field(r - 0.5, l)) * 0.024 * (1 - detail);
-        dummy.position.set(px, py, pz);
-        dummy.rotation.set(tilt, 0, 0);
-        dummy.scale.setScalar(isSelected ? 0 : 1);
-        dummy.updateMatrix();
-        cellMatrix.copy(dummy.matrix);
-        body.setMatrixAt(index, cellMatrix);
-        // Every component uses the same physical cell transform, including its slope.
-        const component = (
-          mesh: T.InstancedMesh,
-          slot: number,
-          x: number,
-          y: number,
-          z: number,
-          rotation = 0,
-          scale = 1,
-        ) => {
-          dummy.position.set(x, y, z);
-          dummy.rotation.set(rotation, 0, 0);
-          dummy.scale.set(scale, scale, 1);
-          dummy.updateMatrix();
-          componentMatrix.multiplyMatrices(cellMatrix, dummy.matrix);
-          mesh.setMatrixAt(slot, componentMatrix);
-        };
-        component(edges, index, 0, layout.height / 2 + .007, 0);
-        component(artwork, index, 0, -.04, layout.depth / 2 + 0.014, 0, p.coverScale);
-        const columnItems = columns[wrap(l, columns.length)].items;
-        indices[index] = columnItems[wrap(r, columnItems.length)].id;
-        for (let pin = 0; pin < 2; pin++)
-          component(
-            pins,
-            index * 2 + pin,
-            pin ? 1.57 : -1.57,
-            1.33,
-            0.135,
-            Math.PI / 2,
-          );
-        index++;
-      }
-    for (const mesh of [body, edges, pins, artwork])
-      mesh.instanceMatrix.needsUpdate = true;
-    artGeometry.attributes.odImage.needsUpdate = true;
-    body.computeBoundingSphere();
-    const browseDistance = Math.max(.36, p.cameraDistance - (narrow ? .04 : 0));
+    const browseDistance = Math.max(.36, p.cameraDistance + (narrow ? .13 : 0));
     aim.set(
       model.object.position.x * blend,
       1.0 * (1 - blend) + model.object.position.y * blend,
@@ -833,7 +804,7 @@ export function createLabScene(
       aim.y + 17 * browseDistance * (1 - blend) + 0.4 * blend,
       aim.z +
         26 * browseDistance * (1 - blend) +
-        (Math.max(7.8, narrow ? Math.max(13.8, 5.7 / camera.aspect) : 7.8) /
+        (Math.max(7.8, narrow ? Math.max(16, 6.6 / camera.aspect) : 7.8) /
           zoom) *
           blend,
     );
@@ -882,6 +853,48 @@ export function createLabScene(
     }
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
+    // Cull complete physical bounds against this frame's camera, then draw
+    // opaque instances near-to-far so software GPUs can reject covered pixels.
+    // Shadow casters receive extra margin outside the visible frame.
+    const columns = archiveColumns(state.items);
+    const radius = Math.hypot(layout.width, layout.height, layout.depth) / 2 + .2;
+    cellSphere.radius = radius + (renderer.shadowMap.enabled ? 4 : 0);
+    viewFrustum.setFromProjectionMatrix(clipMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    camera.getWorldDirection(viewDirection);
+    cellOffsets.sort((a, b) => (a.x - b.x) * layout.columnGap * viewDirection.x + (a.z - b.z) * layout.rowGap * viewDirection.z);
+    artTransform.makeScale(p.coverScale, p.coverScale, 1).setPosition(0, -.04, layout.depth / 2 + .014);
+    let index = 0;
+    if (arrayVisible) for (const { x, z } of cellOffsets) {
+      const l = Math.floor(lane) + x, r = Math.floor(row) + z;
+      const px = (l - lane) * layout.columnGap,
+        py = field(r, l) + hoverLift(l, r) + (l === state.lane && r === state.row && !model.object.visible ? lift.value : retiringLifts.get(`${l}:${r}`)?.value || 0),
+        pz = (r - row) * layout.rowGap;
+      cellSphere.center.set(px, py, pz);
+      if (!viewFrustum.intersectsSphere(cellSphere)) continue;
+      const cell = cells[index];
+      if (cell) { cell.lane = l; cell.row = r; } else cells[index] = { lane: l, row: r };
+      const selected = (model.object.visible && l === state.lane && r === state.row) || outgoing.some(old => old.lane === l && old.row === r);
+      const tilt = (field(r + .5, l) - field(r - .5, l)) * .024 * (1 - detail);
+      dummy.position.set(px, py, pz);
+      dummy.rotation.set(tilt, 0, 0);
+      dummy.scale.setScalar(selected ? 0 : 1);
+      dummy.updateMatrix();
+      cellMatrix.copy(dummy.matrix);
+      body.setMatrixAt(index, cellMatrix);
+      edges.setMatrixAt(index, componentMatrix.multiplyMatrices(cellMatrix, edgeTransform));
+      artwork.setMatrixAt(index, componentMatrix.multiplyMatrices(cellMatrix, artTransform));
+      const columnItems = columns[wrap(l, columns.length)].items;
+      indices[index] = columnItems[wrap(r, columnItems.length)].id;
+      for (let pin = 0; pin < 2; pin++) pins.setMatrixAt(index * 2 + pin, componentMatrix.multiplyMatrices(cellMatrix, pinTransforms[pin]));
+      index++;
+    }
+    cells.length = index;
+    for (const mesh of [body, edges, artwork]) { mesh.count = index; mesh.instanceMatrix.needsUpdate = true; }
+    pins.count = index * 2;
+    pins.instanceMatrix.needsUpdate = true;
+    artGeometry.attributes.odImage.needsUpdate = true;
+    body.computeBoundingSphere();
+    if (host.dataset.renderedCells !== String(index)) host.dataset.renderedCells = String(index);
     if (composer) {
       const bokeh = composer.passes.find(
         (pass) => pass instanceof BokehPass,
@@ -891,8 +904,11 @@ export function createLabScene(
           camera.position.distanceTo(aim);
       composer.render(dt);
     } else renderer.render(scene, camera);
+    // Software GL can occupy most of a frame. Leave a browser turn after the
+    // actual draw finishes so pointer events, author imports and layout can run.
+    if (software) lastDraw = performance.now();
     firstFrame();
-    if (previewSurface && now - previewCaptured >= 200) {
+    if (previewSurface && now - previewCaptured >= 80) {
       previewCaptured = now;
       try {
         previewSurface.src = canvas.toDataURL("image/jpeg", .75);
@@ -942,7 +958,7 @@ export function createLabScene(
     renderer.setAnimationLoop(null);
   }
   function invalidate() {
-    if (alive && !lost && visible && !document.hidden && !rendering) {
+    if (alive && !lost && visible && !document.hidden && !renderSuspended(host) && !rendering) {
       // Input may arrive several times per frame. Only restart the clock when
       // resuming: resetting it on every pointer event starves spring/camera time.
       last = performance.now();
@@ -952,6 +968,10 @@ export function createLabScene(
       renderer.setAnimationLoop(draw);
     }
   }
+  document.addEventListener("outdesign:render-visibility", () => {
+    if (renderSuspended(host)) stopRendering();
+    else invalidate();
+  }, { signal: abort.signal });
   function hitCell(x: number, y: number) {
     const rect = canvas.getBoundingClientRect();
     pointer.set(
@@ -964,7 +984,7 @@ export function createLabScene(
       true,
     )[0];
     if (!hit) return null;
-    if (hit.instanceId !== undefined) return cells[hit.instanceId];
+    if (hit.instanceId !== undefined) return cells[hit.instanceId] ? { ...cells[hit.instanceId] } : null;
     for (const old of outgoing) {
       let node: T.Object3D | null = hit.object;
       while (node) {
@@ -1114,9 +1134,10 @@ export function createLabScene(
       firstFrame();
       alive = false;
       abort.abort();
-      controls.dispose();
+      disposeOrbitControls(controls, orbitEventRoot);
       stopRendering();
       observer.disconnect();
+      cancelAnimationFrame(resizeFrame);
       intersection.disconnect();
       images.forEach((image) => {
         image.onload = null;
@@ -1126,7 +1147,14 @@ export function createLabScene(
       composer?.dispose();
       light.shadow.map?.dispose();
       environment.dispose();
+      // three 0.183's shared DFG texture retains per-renderer dispose callbacks.
+      // Release its GPU allocations before dropping a preview renderer; active
+      // scenes upload this shared lookup again on their next draw.
+      for (const material of [shell, topMaterial, model.metal, model.glass]) {
+        captureLookups(material);
+      }
       disposeObject(scene);
+      rendererLookups.forEach(texture => texture.dispose());
       previewSurface?.remove();
       renderer.dispose();
       host.dataset.ready = "false";

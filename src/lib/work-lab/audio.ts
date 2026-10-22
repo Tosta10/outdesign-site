@@ -2,16 +2,23 @@
 export class LabAudio {
   private context?: AudioContext;
   private master?: GainNode;
+  private limiter?: DynamicsCompressorNode;
   private drones: OscillatorNode[] = [];
   private playing = false;
   async enable(volume: number, ambient: boolean) {
     this.context ||= new AudioContext();
     if (!this.master) {
       this.master = this.context.createGain();
-      this.master.connect(this.context.destination);
+      this.limiter = this.context.createDynamicsCompressor();
+      this.limiter.threshold.value = -3;
+      this.limiter.knee.value = 3;
+      this.limiter.ratio.value = 12;
+      this.limiter.attack.value = 0.003;
+      this.limiter.release.value = 0.15;
+      this.master.connect(this.limiter).connect(this.context.destination);
     }
     await this.context.resume();
-    this.master.gain.setTargetAtTime(volume, this.context.currentTime, 0.15);
+    this.master.gain.setTargetAtTime(Math.max(0, Math.min(6, Number.isFinite(volume) ? volume : 0)), this.context.currentTime, 0.15);
     if (ambient && !this.playing) {
       this.playing = true;
       for (const frequency of [110, 164.81, 220.2]) {

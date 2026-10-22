@@ -363,7 +363,7 @@ export const workLabSchema = z.object({
     bootDuration: z.number().min(.3).max(5),
     transitionDuration: z.number().min(.1).max(1.5),
     explosionDistance: z.number().min(.25).max(2),
-    volume: z.number().min(0).max(.3),
+    volume: z.number().min(0).max(6),
   }).strict(),
   effects: z.object({
     boot: z.boolean(),

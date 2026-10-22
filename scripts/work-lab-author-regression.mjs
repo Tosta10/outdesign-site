@@ -4,6 +4,10 @@ export async function workLabAuthorRegression({ page, api, password1, password2 
   const label = name => page.getByLabel(name, { exact: true });
   await page.setViewportSize({ width: 1440, height: 1080 });
   await button("作者模式").click();
+  await page.waitForFunction(() => document.querySelector('#public-site .lab-stage')?.dataset.renderState === "paused");
+  const lockedFrames = await page.locator('#public-site .lab-stage').getAttribute('data-frames');
+  await page.waitForTimeout(250);
+  assert.equal(await page.locator('#public-site .lab-stage').getAttribute('data-frames'), lockedFrames, "The locked author entrance keeps a static public scene");
   const status = await (await fetch(api.url + "/api/status")).json();
   password1 ||= crypto.randomUUID() + "-first";
   password2 ||= crypto.randomUUID() + "-second";
@@ -60,7 +64,12 @@ export async function workLabAuthorRegression({ page, api, password1, password2 
   await page.screenshot({ path: "artifacts/work-author-blocks.png" });
   await page.getByRole("button", { name: /執行預覽/ }).click();
   await page.waitForFunction(() => document.querySelector('.logic-live-preview .lab-stage')?.dataset.cameraFollow === "38");
+  await page.waitForFunction(() => document.querySelector('iframe[title="積木即時預覽"]')?.contentDocument?.querySelector('.lab-stage')?.dataset.renderState === "paused");
+  const miniFrames = await mini.locator('.lab-stage').getAttribute('data-frames');
+  await page.waitForTimeout(250);
+  assert.equal(await mini.locator('.lab-stage').getAttribute('data-frames'), miniFrames, "A covered thumbnail stops rendering while the interactive preview runs");
   await button("關閉積木視窗").click();
+  await page.waitForFunction(before => +document.querySelector('iframe[title="積木即時預覽"]').contentDocument.querySelector('.lab-stage').dataset.frames > +before, miniFrames);
   await label("切換模式").selectOption("layers");
   await button("發布").click();
   await button("確認發布").click();

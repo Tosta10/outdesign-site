@@ -1,4 +1,7 @@
+import { positionToVolume, volumeToPosition } from "./volume";
+import { paintBoot } from "../boot-animation";
 import { applySiteTheme, savedSiteTheme, setSiteTheme, type SiteTheme } from "../site-theme";
+import { savedSiteMotion, setSiteMotion, isSiteMotion, type SiteMotion } from "../site-motion";
 import { resolveWorkLabConfig, labActions } from "../../../supabase/functions/_shared/work-lab-config.ts";
 import { patchLabConfig, takeLabCommands, type LabCommand } from "./bridge";
 import {
@@ -57,7 +60,7 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
     const local = !authoring && visitor && typeof visitor === "object" ? visitor as Record<string, unknown> : {};
     return normalizePreferences({ ...config.options, motion: true,
       sound: config.options.sound === "on", ambient: config.options.ambient === "on", volume: config.parameters.volume,
-      ...local, ...(!authoring ? { theme: savedSiteTheme() || (local.theme === "dark" || local.theme === "light" ? local.theme : root.closest<HTMLElement>(".site")?.dataset.siteTheme || config.options.theme) } : {}), effects: { ...config.effects, ...(local.effects && typeof local.effects === "object" ? local.effects : {}) },
+      ...local, ...(!authoring ? { motionPreset: savedSiteMotion() || local.motionPreset || config.options.motionPreset, theme: savedSiteTheme() || (local.theme === "dark" || local.theme === "light" ? local.theme : root.closest<HTMLElement>(".site")?.dataset.siteTheme || config.options.theme) } : {}), effects: { ...config.effects, ...(local.effects && typeof local.effects === "object" ? local.effects : {}) },
     }, media.matches);
   };
   const allItems = JSON.parse(root.dataset.labItems || "[]") as LabItem[];
@@ -385,8 +388,12 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
           ];
         if (el instanceof HTMLInputElement && el.type === "checkbox")
           el.checked = Boolean(v);
-        else el.value = String(v);
+        else el.value = el.dataset.labSetting === "volume" ? String(volumeToPosition(Number(v))) : String(v);
       });
+    const volumeLabel = `${Math.round(state.preferences.volume / .3 * 10) / 10}×`;
+    q('[data-lab-volume-value]').textContent = volumeLabel;
+    q('[data-lab-setting="volume"]').setAttribute('aria-valuetext', volumeLabel);
+    root.querySelectorAll<HTMLElement>('[data-lab-volume-preset]').forEach(button => button.setAttribute('aria-pressed', String(Math.abs(Number(button.dataset.labVolumePreset) - state.preferences.volume) < .01)));
     root
       .querySelectorAll<HTMLInputElement>("[data-lab-effect]")
       .forEach(
@@ -568,7 +575,8 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
     const overlay = q(".lab-boot");
     overlay.hidden = false;
     overlay.style.setProperty("--boot", "0");
-    q("[data-lab-action=skip]").focus({ preventScroll: true });
+    overlay.tabIndex = -1;
+    overlay.focus({ preventScroll: true });
     const start = performance.now();
     const frame = (now: number) => {
       if (disposed) return;
@@ -576,17 +584,7 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
         1,
         (now - start) / (motionAllowed(state.preferences, "boot") ? state.config.parameters.bootDuration * 1000 : 1),
       );
-      overlay.style.setProperty("--boot", String(p));
-      const message =
-        p < 0.35
-          ? "BUILDING GEOMETRY"
-          : p < 0.7
-            ? "CALIBRATING LIGHT"
-            : "OBJECT SPACE / READY";
-      q("[data-lab-boot-text]").textContent = message.slice(
-        0,
-        Math.max(1, Math.round(((p % 0.35) / 0.35) * 25)),
-      );
+      paintBoot(overlay, p);
       if (p < 1) bootFrame = requestAnimationFrame(frame);
       else skipBoot();
     };
@@ -595,6 +593,12 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
   const click = (event: Event) => {
     if (authoring) return;
     const target = event.target as Element;
+    const volumePreset = target.closest<HTMLElement>('[data-lab-volume-preset]');
+    if (volumePreset) {
+      state.preferences.volume = Number(volumePreset.dataset.labVolumePreset);
+      syncAudio(); persist(); sync();
+      return;
+    }
     if (target.closest("[data-lab-close]")) {
       const dialog = target.closest<HTMLDialogElement>("dialog");
       if (dialog) closeModal(dialog);
@@ -756,9 +760,6 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
         log("鏡頭已復位");
         sync();
         break;
-      case "skip":
-        skipBoot();
-        break;
       case "replay":
         boot();
         break;
@@ -819,12 +820,13 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
             input.type === "checkbox"
               ? input.checked
               : input.type === "range"
-                ? Number(input.value)
+                ? setting === "volume" ? positionToVolume(Number(input.value)) : Number(input.value)
                 : input.value,
         },
         media.matches,
       );
       if (setting === "theme") setSiteTheme(state.preferences.theme);
+      if (!authoring && (setting === "motionPreset" || setting === "motion")) setSiteMotion(state.preferences.motionPreset);
       if (state.preferences.sound || state.preferences.ambient)
         void audio
           .enable(state.preferences.volume, state.preferences.ambient)
@@ -1256,11 +1258,9 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
   media.addEventListener(
     "change",
     () => {
-      if (media.matches && state.preferences.motionPreset !== "full") {
-        state.preferences.motion = false;
-        skipBoot();
-        sync();
-      }
+      state.preferences = normalizePreferences({ ...state.preferences, motion: true }, media.matches);
+      if (!state.preferences.motion) skipBoot();
+      sync();
     },
     { signal: abort.signal },
   );
@@ -1331,6 +1331,13 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
   root.addEventListener("outdesign:lab-command", ((event: CustomEvent<LabCommand>) => command(event.detail)) as EventListener, { signal: abort.signal });
   root.addEventListener("outdesign:lab-settings", () => showModal(q<HTMLDialogElement>("[data-lab-modal=settings]")), { signal: abort.signal });
   root.dataset.labController = "ready";
+  document.addEventListener("outdesign:site-motion", ((event: CustomEvent<SiteMotion>) => {
+    if (authoring || !isSiteMotion(event.detail)) return;
+    state.preferences = normalizePreferences({ ...state.preferences, motion: true, motionPreset: event.detail }, media.matches);
+    if (!state.preferences.motion) skipBoot();
+    persist();
+    sync();
+  }) as EventListener, { signal: abort.signal });
   document.addEventListener("outdesign:site-theme", ((event: CustomEvent<SiteTheme>) => {
     if (authoring || !["light", "dark"].includes(event.detail)) return;
     state.preferences.theme = event.detail;
@@ -1373,7 +1380,7 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
         const cell = locateItem(allItems, selected.key);
         select(cell.lane, cell.row, true);
       }
-    } else if (!authoring && state.mode === "browse" && motionAllowed(state.preferences, "boot")) boot();
+    } // The shared page loader owns initial boot; replay remains available.
   } catch {
     root.dataset.engine = "fallback";
     stage.dataset.ready = "fallback";

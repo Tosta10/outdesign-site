@@ -200,7 +200,9 @@ export function SiteRenderer({
             <img
               {...elementProps(c, "hero-image", editing)}
               className="lunar-backdrop"
-              src={img(scenic)}
+              src={img(scenic === "/assets/lunar-landscape.webp" && c.workLab?.options.theme === "light" ? "/assets/lunar-dawn-light.webp" : scenic)}
+              data-theme-light-src={scenic === "/assets/lunar-landscape.webp" ? img("/assets/lunar-dawn-light.webp") : undefined}
+              data-theme-dark-src={scenic === "/assets/lunar-landscape.webp" ? img(scenic) : undefined}
               alt={
                 c.hero.image === "/assets/prism.svg" ||
                 c.hero.image === "/assets/lunar-landscape.webp"
@@ -238,14 +240,14 @@ export function SiteRenderer({
             <nav className="header-actions" aria-label="網站導覽工具">
               <button
                 {...elementProps(c, "menu-button", editing)}
-                className="menu-toggle"
+                className="menu-toggle navigation-trigger"
                 data-menu-toggle
                 aria-controls="site-navigation"
                 aria-expanded="false"
                 aria-label="開啟選單"
               >
-                <span>{text("menu.label")}</span>
-                <Icon name="menu" size={20} />
+                <span aria-hidden="true">☰</span>
+                <small>{text("lab.menu", "導覽")}</small>
               </button>
             </nav>
           </header>
@@ -278,8 +280,8 @@ export function SiteRenderer({
               <a
                 className={`mission-card glass-surface${editing && selected === "about" ? " is-selected" : ""}`}
                 {...elementProps(c, "mission", editing)}
-                data-page-target="about"
-                href={url("about")}
+                data-page-target="work"
+                href={url("work")}
                 data-optical-card
                 data-edit={editing ? "about" : undefined}
               >
@@ -300,7 +302,7 @@ export function SiteRenderer({
                       <span className="circle-arrow">
                         <Icon name="arrow" size={18} />
                       </span>
-                      {text("mission.link")}
+                      作品
                     </span>
                   </div>
                   <div className="mission-study">
@@ -308,9 +310,11 @@ export function SiteRenderer({
                       {...elementProps(c, "mission-image", editing)}
                       src={img(
                         c.presentation?.missionImage ||
-                          "/assets/lunar-landscape.webp",
+                          (c.workLab?.options.theme === "light" ? "/assets/lunar-dawn-light.webp" : "/assets/lunar-landscape.webp"),
                       )}
-                      alt={c.presentation?.missionAlt || "銀光映照的月面山脈"}
+                      data-theme-light-src={!c.presentation?.missionImage || c.presentation.missionImage === "/assets/lunar-landscape.webp" ? img("/assets/lunar-dawn-light.webp") : undefined}
+                      data-theme-dark-src={!c.presentation?.missionImage || c.presentation.missionImage === "/assets/lunar-landscape.webp" ? img("/assets/lunar-landscape.webp") : undefined}
+                      alt={c.presentation?.missionAlt || "月光映照的山脈"}
                       width="320"
                       height="440"
                       loading="lazy"
@@ -363,33 +367,6 @@ export function SiteRenderer({
                       <p>{value(`projects.${first.id}.description`)}</p>
                       <span className="text-link">
                         {text("featured.link")} <Icon name="arrow" size={14} />
-                      </span>
-                    </div>
-                  </div>
-                </a>
-              )}
-              {!first && (
-                <a
-                  className="featured-card glass-surface"
-                  data-page-target="work"
-                  href={url("work")}
-                  {...elementProps(c, "work-observatory", editing)}
-                >
-                  <div className="card-meta">
-                    <span>
-                      02 <i />
-                    </span>
-                    <span>INTERACTIVE STUDY</span>
-                  </div>
-                  <div className="featured-body">
-                    <div className="lab-feature-symbol" aria-hidden="true">
-                      ◈
-                    </div>
-                    <div>
-                      <h2>物件研究室</h2>
-                      <p>讓想法，有了形狀。探索即時生成的結構、光線與運動。</p>
-                      <span className="text-link">
-                        進入作品 <Icon name="arrow" size={14} />
                       </span>
                     </div>
                   </div>

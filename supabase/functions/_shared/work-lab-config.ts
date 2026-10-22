@@ -26,7 +26,7 @@ export const labParameters = {
   bootDuration: { label: "開場秒數", min: .3, max: 5, step: .1, value: 3.2 },
   transitionDuration: { label: "文字過渡秒數", min: .1, max: 1.5, step: .05, value: .46 },
   explosionDistance: { label: "拆解間距倍率", min: .25, max: 2, step: .05, value: 1 },
-  volume: { label: "音量", min: 0, max: .3, step: .01, value: .12 },
+  volume: { label: "音量", min: 0, max: 6, step: .01, value: 3 },
 } as const;
 export const labEffects = {
   boot: "開場動畫", selectionWave: "選取波浪", idleWave: "閒置起伏",

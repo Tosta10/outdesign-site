@@ -37,11 +37,13 @@ export function CodePreview({
   }, [page]);
   useEffect(() => {
     if (!viewport.current) return;
-    const observer = new ResizeObserver(([entry]) =>
-      setAvailable(entry.contentRect.width),
-    );
+    let frame = 0;
+    const observer = new ResizeObserver(([entry]) => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setAvailable(entry.contentRect.width));
+    });
     observer.observe(viewport.current);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, []);
   const scale = Math.min(1, available / width);
   return (

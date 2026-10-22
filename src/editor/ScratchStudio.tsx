@@ -739,7 +739,7 @@ export default function ScratchStudio(props: Props) {
       </section>
       <aside className="scratch-library" aria-label="邏輯積木庫">
         <PanelResizer side="logic" />
-        <MiniPreview content={deferredContent} page={page} api={props.api} base={props.base} assets={props.assets} onRun={() => setPreview(true)} />
+        <MiniPreview content={deferredContent} page={page} api={props.api} base={props.base} assets={props.assets} suspended={Boolean(preview || editing)} onRun={() => setPreview(true)} />
         {page === "work" && <WorkLabPanel content={content} update={update} compact />}
         <div className="scratch-library-title">
           <p className="eyebrow">BLOCK LIBRARY</p>

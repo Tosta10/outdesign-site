@@ -1038,7 +1038,7 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .work-lab * {
+  .site:not([data-motion="full"]) .work-lab * {
     transition: none !important;
     scroll-behavior: auto !important;
   }

@@ -1,8 +1,10 @@
 import { applySiteTheme, savedSiteTheme, setSiteTheme, type SiteTheme } from "./site-theme";
 import { initEffects } from "./effects";
 import { initPageLoading } from "./page-loading";
+import { initSiteMotion } from "./site-motion";
 export function initViewer(root: Document | HTMLElement): () => void {
   if (root.querySelector('.site[data-editing="true"]')) return () => {};
+  const disposeMotion = initSiteMotion(root);
   const disposeEffects = initEffects(root);
   const abort = new AbortController();
   const workLabs: (() => void)[] = [];
@@ -13,11 +15,10 @@ export function initViewer(root: Document | HTMLElement): () => void {
       if (abort.signal.aborted) dispose(); else workLabs.push(dispose);
     }).catch(() => { element.dataset.engine = "fallback"; });
   });
-  const disposeLoading = root === document ? initPageLoading(Promise.all(workReady)) : () => {};
   let disposeLogic: (() => void) | undefined;
   const logicSource = root.querySelector("[data-site-logic]")?.textContent;
-  if (logicSource)
-    import("./logic-runtime")
+  const logicReady = logicSource
+    ? import("./logic-runtime")
       .then(async ({ initLogic }) => {
         await Promise.all(workReady);
         if (!abort.signal.aborted) {
@@ -30,12 +31,13 @@ export function initViewer(root: Document | HTMLElement): () => void {
       })
       .catch(() => {
         /* A failed optional logic chunk must not block navigation. */
-      });
+      }) : Promise.resolve();
   const listen = (element: EventTarget, type: string, handler: EventListener) =>
     element.addEventListener(type, handler, { signal: abort.signal });
   const site = root.querySelector<HTMLElement>(".site");
   const defaultTheme: SiteTheme = site?.dataset.siteTheme === "light" ? "light" : "dark";
   applySiteTheme(root, savedSiteTheme() || defaultTheme);
+  const disposeLoading = root === document ? initPageLoading(Promise.all([...workReady, logicReady])) : () => {};
   listen(document, "outdesign:site-theme", ((event: CustomEvent<SiteTheme>) => {
     if (event.detail === "light" || event.detail === "dark") applySiteTheme(root, event.detail);
   }) as EventListener);
@@ -153,6 +155,7 @@ export function initViewer(root: Document | HTMLElement): () => void {
   }
   return () => {
     disposeEffects();
+    disposeMotion();
     disposeLoading();
     disposeLogic?.();
     workLabs.forEach((dispose) => dispose());

@@ -1,16 +1,18 @@
+import { reducedSiteMotion } from "./site-motion";
+import { renderSuspended } from "./render-visibility";
 /** Small, event-driven effects. No animation loop runs while the pointer is idle. */
 export function initEffects(root: Document | HTMLElement): () => void {
   const site = root.querySelector<HTMLElement>(".site");
   if (!site) return () => {};
   const abort = new AbortController();
   const reduced = matchMedia("(prefers-reduced-motion: reduce)");
-  const fine = matchMedia("(hover: hover) and (pointer: fine)");
+  const fine = matchMedia("(any-hover: hover) and (any-pointer: fine)");
   const cleanups: (() => void)[] = [];
   const eligible = () =>
-    !reduced.matches &&
+    !reducedSiteMotion(site) &&
     fine.matches &&
     !document.hidden &&
-    site.dataset.editing !== "true";
+    site.dataset.editing !== "true" && !renderSuspended(site);
   site.querySelectorAll<HTMLElement>("[data-optical-card]").forEach((card) => {
     let frame = 0,
       x = 0,
@@ -69,6 +71,7 @@ export function initEffects(root: Document | HTMLElement): () => void {
       (event) => {
         if (
           !eligible() ||
+          event.pointerType === "touch" ||
           (card.dataset.effect || site.dataset.cardEffect) !== "tilt"
         )
           return;
@@ -103,7 +106,7 @@ export function initEffects(root: Document | HTMLElement): () => void {
   site.addEventListener(
     "click",
     (event) => {
-      if (reduced.matches || site.dataset.press !== "true") return;
+      if (reducedSiteMotion(site) || renderSuspended(site) || site.dataset.press !== "true") return;
       const target = (event.target as Element).closest<HTMLElement>(
         "button, .circle-arrow",
       );
@@ -139,6 +142,8 @@ export function initEffects(root: Document | HTMLElement): () => void {
   });
   reduced.addEventListener("change", resetAll, { signal: abort.signal });
   fine.addEventListener("change", resetAll, { signal: abort.signal });
+  document.addEventListener("outdesign:site-motion", resetAll, { signal: abort.signal });
+  document.addEventListener("outdesign:render-visibility", resetAll, { signal: abort.signal });
   return () => {
     abort.abort();
     resetAll();

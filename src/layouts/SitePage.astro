@@ -1,4 +1,5 @@
 ---
+import { BootGraphic } from '../components/BootGraphic';
 import { SiteRenderer, type SitePage } from '../components/SiteRenderer';
 import { assetUrl, loadPublicContent } from '../lib/content';
 import { pageTitle } from '../lib/presentation';
@@ -34,30 +35,34 @@ const title = pageTitle(content, page);
     <title>{title}</title>
     <script is:inline>
       try { const theme = localStorage.getItem('outdesign.site.theme.v1'); if (theme === 'light' || theme === 'dark') document.documentElement.dataset.siteTheme = theme; } catch {}
+      try { const motion = localStorage.getItem('outdesign.site.motion.v1') || JSON.parse(localStorage.getItem('outdesign.work-lab.preferences.v2') || 'null')?.motionPreset || 'system'; document.documentElement.dataset.siteMotion = motion === 'full' || motion === 'system' && !matchMedia('(prefers-reduced-motion: reduce)').matches ? 'full' : 'reduced'; } catch {}
     </script>
     <style is:inline>
-      #page-loader { position:fixed;inset:0;z-index:100000;display:grid;place-content:center;gap:20px;padding:24px;background:#eeede7;color:#202923;text-align:center;font:12px/1.6 system-ui;letter-spacing:.12em;transition:opacity .22s; }
-      html[data-site-theme="dark"] #page-loader { background:#11161c;color:#efefe9; }
-      #page-loader strong { font-size:22px;letter-spacing:.08em; }
-      #page-loader i { width:180px;height:2px;overflow:hidden;background:currentColor;opacity:.5;clip-path:inset(0 60% 0 0);animation:page-loading 1.4s ease-in-out infinite alternate; }
+      #page-loader { position:fixed;inset:0;z-index:100000;--boot:0;--lab-bg:#eeede7;--lab-accent:#202923;--lab-line:#20292330;background:var(--lab-bg);color:var(--lab-accent);text-align:center; }
+      #page-loader > * { visibility:hidden; }
+      #page-loader[data-visible="true"] > * { visibility:visible; }
+      html[data-site-theme="dark"] #page-loader { --lab-bg:#11161c;--lab-accent:#efefe9;--lab-line:#efefe930; }
       body:not([data-page-state="ready"]) #public-site { opacity:0;visibility:hidden; }
-      body[data-page-state="ready"] #page-loader { opacity:0;visibility:hidden;pointer-events:none; }
-      @keyframes page-loading { to { clip-path:inset(0 0 0 60%); } }
-      @media(prefers-reduced-motion:reduce) { #page-loader { transition:none; } #page-loader i { animation:none;clip-path:none; } }
+      body[data-page-state="ready"] #page-loader { display:none; }
+
     </style>
     <noscript><style>#page-loader { display:none; } body #public-site { opacity:1!important;visibility:visible!important; }</style></noscript>
   </head>
   <body data-page-state="loading" data-api={api} data-base={base} data-version={version} data-page={page}>
-    <div id="page-loader" data-page-loader role="status" aria-live="polite"><strong>OUTDESIGN</strong><span>正在載入介面 / LOADING</span><i aria-hidden="true"></i></div>
+    <div id="page-loader" class="lab-boot" data-page-loader role="status" aria-label="正在準備頁面"><BootGraphic /></div>
     <div id="public-site"><SiteRenderer content={content} api={api} base={base} page={page} /></div>
     <div id="studio-root"></div>
     <script>
       import { initViewer } from '../lib/viewer';
+      import { suspendRendering } from '../lib/render-visibility';
       initViewer(document);
       let opening = false;
       async function launchStudio() {
         if (opening) return;
         opening = true;
+        const publicSite = document.getElementById('public-site')!;
+        suspendRendering(publicSite, true);
+        document.querySelectorAll('[data-studio-launch]').forEach(button => button.setAttribute('aria-busy', 'true'));
         try {
           if (import.meta.env.DEV) {
             const refreshUrl = '/@react-refresh';
@@ -67,8 +72,8 @@ const title = pageTitle(content, page);
           }
           const { openStudio } = await import('../editor/bootstrap');
           await openStudio();
-        } catch (error) { console.error('Editor launch failed', error); window.alert('編輯器載入失敗，請重新整理後再試。'); }
-        finally { opening = false; }
+        } catch (error) { suspendRendering(publicSite, false); console.error('Editor launch failed', error); window.alert('編輯器載入失敗，請重新整理後再試。'); }
+        finally { opening = false; document.querySelectorAll('[data-studio-launch]').forEach(button => button.removeAttribute('aria-busy')); }
       }
       document.addEventListener('click', event => {
         if ((event.target as Element).closest('[data-studio-launch]')) launchStudio();
