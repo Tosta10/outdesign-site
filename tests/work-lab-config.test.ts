@@ -16,6 +16,13 @@ test("author configuration round-trips through the publish schema while legacy d
   workLab.effects.idleWave = false;
   const content = contentSchema.parse({ ...initialContent, workLab });
   assert.deepEqual(JSON.parse(JSON.stringify(content)).workLab, workLab);
+  const legacy = structuredClone(workLab) as any;
+  delete legacy.parameters.selectionDelay;
+  delete legacy.palette.top;
+  delete legacy.palette.darkTop;
+  const migrated = contentSchema.parse({ ...initialContent, workLab: legacy }).workLab!;
+  assert.equal(migrated.parameters.selectionDelay, .45);
+  assert.equal(migrated.palette.top, "#969894");
   for (const invalid of [Infinity, NaN, 200, -1]) {
     assert.equal(contentSchema.safeParse({ ...content, workLab: { ...workLab, parameters: { ...workLab.parameters, cameraFollow: invalid } } }).success, false);
   }

@@ -1,6 +1,7 @@
 /** Shared by the author studio, bounded blocks, browser renderer and API validation. */
 export const labParameters = {
   coverScale: { label: "封面貼合比例", min: .35, max: .82, step: .01, value: .64 },
+  selectionDelay: { label: "選取待機秒數", min: 0, max: 2, step: .05, value: .45 },
   selectionSpeed: { label: "切換彈簧速度", min: 2, max: 16, step: .1, value: 3.7 },
   cameraFollow: { label: "相機跟隨速度", min: 5, max: 40, step: 1, value: 24 },
   cameraTransition: { label: "鏡頭抽取過渡速度", min: 2, max: 20, step: .1, value: 8 },
@@ -48,12 +49,14 @@ export const labPalette = {
   liner: { label: "內層襯底", value: "#e1dcd1" },
   accent: { label: "固定構件", value: "#8b8d88" },
   glass: { label: "玻璃色調", value: "#fffdf5" },
+  top: { label: "頂部灰色邊條", value: "#969894" },
   darkShell: { label: "深色卡帶本體", value: "#11161c" },
   darkFrame: { label: "深色卡帶框架", value: "#11161c" },
   darkBack: { label: "深色資訊基板", value: "#080d12" },
   darkLiner: { label: "深色內層襯底", value: "#11161c" },
   darkAccent: { label: "深色固定構件", value: "#46515b" },
   darkGlass: { label: "深色玻璃色調", value: "#89979d" },
+  darkTop: { label: "深色頂部灰色", value: "#484d52" },
 } as const;
 export const labActions = {
   next: "下一件作品", previous: "上一件作品", "next-column": "下一分類",

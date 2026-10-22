@@ -335,7 +335,10 @@ export async function workLabRegression({ page, api, origin }) {
         return Math.abs(values[axis] - target[axis]) < 0.03;
       },
       { target, axis },
-    );
+    ).catch(async error => {
+      console.error("Archive convergence", { target, axis }, await root.evaluate(el => ({ lane: el.dataset.lane, row: el.dataset.row, mode: el.dataset.mode, navigation: el.dataset.navigation, stage: { ...el.querySelector(".lab-stage").dataset } })));
+      throw error;
+    });
     motionProof.push({
       key,
       before,

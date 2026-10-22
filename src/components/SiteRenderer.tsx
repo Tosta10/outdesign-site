@@ -1,3 +1,5 @@
+import "../styles/site-theme.css";
+import { SiteSettings } from "./SiteSettings";
 import type { CSSProperties } from "react";
 import {
   defaultDesign,
@@ -110,7 +112,7 @@ export function SiteRenderer({
   ] as const;
   if (page === "work")
     return (
-      <div className="site page-work" data-editing={editing} style={styles}>
+      <div className="site page-work" data-site-theme={c.workLab?.options.theme || "light"} data-editing={editing} style={styles}>
         <a className="skip-link" href="#main">
           跳至主要內容
         </a>
@@ -179,6 +181,7 @@ export function SiteRenderer({
     <div
       className={`site theme-${c.settings.theme === "verdant" ? "verdant" : "prism"} page-${page}`}
       style={c.design || pageLayout ? styles : undefined}
+      data-site-theme={c.workLab?.options.theme || "dark"}
       data-card-effect={effects.card}
       data-tilt={effects.tilt}
       data-damping={effects.damping}
@@ -230,7 +233,7 @@ export function SiteRenderer({
               />
               {value("settings.name")}
             </a>
-            <div className="header-actions">
+            <nav className="header-actions" aria-label="網站導覽工具">
               <button
                 {...elementProps(c, "menu-button", editing)}
                 className="menu-toggle"
@@ -242,7 +245,8 @@ export function SiteRenderer({
                 <span>{text("menu.label")}</span>
                 <Icon name="menu" size={20} />
               </button>
-            </div>
+              <SiteSettings />
+            </nav>
           </header>
           {pageLayout?.builtins === false ? null : page === "home" ? (
             <section

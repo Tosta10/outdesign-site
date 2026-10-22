@@ -13,6 +13,7 @@ export function makeObject(
     metalness: 0.7,
     roughness: 0.23,
   });
+  const top = new T.MeshStandardMaterial({ color: 0x969894, metalness: .08, roughness: .72 });
   const substrate = new T.MeshStandardMaterial({
     color: 0xc4beb2,
     metalness: 0.28,
@@ -72,7 +73,7 @@ export function makeObject(
   for (const x of [-1.13, 1.13])
     add(0, new T.BoxGeometry(0.035, 2.94, 0.22), metal, x);
   for (const y of [-1.45, 1.45])
-    add(0, new T.BoxGeometry(2.29, 0.035, 0.22), metal, 0, y);
+    add(0, new T.BoxGeometry(2.29, 0.035, y > 0 ? .04 : .22), y > 0 ? top : metal, 0, y);
   add(1, new T.BoxGeometry(2.24, 2.88, 0.055), glass, 0, 0, 0.2);
   const pictureCanvas = document.createElement("canvas");
   pictureCanvas.width = 1536;
@@ -195,7 +196,8 @@ diffuseColor *= mix(odSoft, odSharp, odVisible);
   labelCanvas.width = 768;
   labelCanvas.height = 96;
   const labelCtx = labelCanvas.getContext("2d")!;
-  labelCtx.clearRect(0, 0, 768, 96);
+  labelCtx.fillStyle = "#969894";
+  labelCtx.fillRect(0, 0, 768, 96);
   labelCtx.fillStyle = "#41453f";
   labelCtx.font = "28px monospace";
   labelCtx.fillText(`OUTDESIGN / ${item.code}`, 24, 58);
@@ -213,7 +215,7 @@ diffuseColor *= mix(odSoft, odSharp, odVisible);
     piece.userData.part = i;
     object.add(piece);
   });
-  return { object, pieces, reveal, glass, accent, picture, metal, substrate, liner: liner.material as T.MeshStandardMaterial, labelCanvas, labelCtx, label, code: item.code };
+  return { object, pieces, reveal, glass, accent, picture, metal, top, substrate, liner: liner.material as T.MeshStandardMaterial, labelCanvas, labelCtx, label, code: item.code };
 }
 export function disposeObject(root: T.Object3D) {
   root.userData.disposed = true;
@@ -243,15 +245,19 @@ export function configureObject(model: ReturnType<typeof makeObject>, config: Wo
   model.liner.color.set(config.palette.liner);
   model.glass.color.set(config.palette.glass);
   model.accent.color.set(config.palette.accent);
-  const darkKeys = ["darkFrame", "darkBack", "darkLiner", "darkGlass", "darkAccent"] as const;
-  [model.metal, model.substrate, model.liner, model.glass, model.accent].forEach((material, i) => {
+  model.top.color.set(config.palette.top);
+  model.object.userData.labelTop = config.palette.top;
+  model.object.userData.labelDarkTop = config.palette.darkTop;
+  delete model.object.userData.labelDark;
+  const darkKeys = ["darkFrame", "darkBack", "darkLiner", "darkGlass", "darkAccent", "darkTop"] as const;
+  [model.metal, model.substrate, model.liner, model.glass, model.accent, model.top].forEach((material, i) => {
     material.userData.labBaseColor = material.color.clone();
     material.userData.labDarkColor = new T.Color(config.palette[darkKeys[i]]);
   });
 }
 
 export function applyObjectTheme(model: ReturnType<typeof makeObject>, amount: number) {
-  [model.metal, model.substrate, model.liner, model.glass, model.accent].forEach((material) => {
+  [model.metal, model.substrate, model.liner, model.glass, model.accent, model.top].forEach((material) => {
     const base = material.userData.labBaseColor as T.Color | undefined;
     const dark = material.userData.labDarkColor as T.Color | undefined;
     if (base && dark) material.color.lerpColors(base, dark, amount);
@@ -259,7 +265,8 @@ export function applyObjectTheme(model: ReturnType<typeof makeObject>, amount: n
   const dark = amount > .5;
   if (model.object.userData.labelDark !== dark) {
     model.object.userData.labelDark = dark;
-    model.labelCtx.clearRect(0, 0, 768, 96);
+    model.labelCtx.fillStyle = dark ? model.object.userData.labelDarkTop : model.object.userData.labelTop;
+    model.labelCtx.fillRect(0, 0, 768, 96);
     model.labelCtx.fillStyle = dark ? "#d0d6db" : "#41453f";
     model.labelCtx.font = "28px monospace";
     model.labelCtx.fillText(`OUTDESIGN / ${model.code}`, 24, 58);

@@ -1,3 +1,4 @@
+import { applySiteTheme, savedSiteTheme, setSiteTheme, type SiteTheme } from "../site-theme";
 import { resolveWorkLabConfig, labActions } from "../../../supabase/functions/_shared/work-lab-config.ts";
 import { patchLabConfig, takeLabCommands, type LabCommand } from "./bridge";
 import {
@@ -56,11 +57,12 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
     const local = !authoring && visitor && typeof visitor === "object" ? visitor as Record<string, unknown> : {};
     return normalizePreferences({ ...config.options, motion: true,
       sound: config.options.sound === "on", ambient: config.options.ambient === "on", volume: config.parameters.volume,
-      ...local, effects: { ...config.effects, ...(local.effects && typeof local.effects === "object" ? local.effects : {}) },
+      ...local, ...(!authoring ? { theme: savedSiteTheme() || (local.theme === "dark" || local.theme === "light" ? local.theme : root.closest<HTMLElement>(".site")?.dataset.siteTheme || config.options.theme) } : {}), effects: { ...config.effects, ...(local.effects && typeof local.effects === "object" ? local.effects : {}) },
     }, media.matches);
   };
   const allItems = JSON.parse(root.dataset.labItems || "[]") as LabItem[];
   const state: SceneState = {
+    pointerActive: false,
     navigationUntil: 0,
     config: baseConfig,
     authoring,
@@ -221,6 +223,7 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
       `COLUMN ${String(wrap(state.lane, columns.length) + 1).padStart(2, "0")} / ${String(columns.length).padStart(2, "0")}`,
     );
     root.dataset.theme = state.preferences.theme;
+    if (!authoring) applySiteTheme(root, state.preferences.theme);
     root.dataset.motion = String(state.preferences.motion);
     if (displayedMode !== state.mode) {
       const detailPanel = q(".lab-detail"),
@@ -425,6 +428,7 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
   }
   function navigatePlane(coordinate: { lane: number; row: number }) {
     state.track = coordinate;
+    state.wave = performance.now();
     const lane = Math.round(coordinate.lane),
       row = Math.round(coordinate.row);
     if (lane !== state.lane || row !== state.row) {
@@ -798,6 +802,7 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
         },
         media.matches,
       );
+      if (setting === "theme") setSiteTheme(state.preferences.theme);
       if (state.preferences.sound || state.preferences.ambient)
         void audio
           .enable(state.preferences.volume, state.preferences.ambient)
@@ -929,6 +934,7 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
         return;
       if ((event.target as Element).closest("button") || event.button > 1)
         return;
+      state.pointerActive = true;
       cancelAnimationFrame(coastFrame);
       scene?.clearHover();
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -1036,6 +1042,7 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
       if (drag) drag.moved = true;
       return;
     }
+    state.pointerActive = false;
     const previous = drag;
     drag = null;
     if (!previous) return;
@@ -1058,7 +1065,7 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
     const momentum = new ArchivePlaneMomentum(position, velocity, state.config.parameters.inertia, state.config.parameters.snapSpeed);
     let last = performance.now();
     const coast = (now: number) => {
-      momentum.step(Math.min(0.05, Math.max(0, (now - last) / 1000)));
+      momentum.step(Math.min(1, Math.max(0, (now - last) / 1000)));
       last = now;
       navigatePlane(momentum.value);
       root.dataset.navigation = momentum.phase;
@@ -1199,6 +1206,7 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
     () => {
       drag = null;
       pointers.clear();
+      state.pointerActive = false;
       state.offset = { x: 0, y: 0 };
       state.track = null;
       cancelAnimationFrame(coastFrame);
@@ -1291,6 +1299,11 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
   }
   root.addEventListener("outdesign:lab-command", ((event: CustomEvent<LabCommand>) => command(event.detail)) as EventListener, { signal: abort.signal });
   root.dataset.labController = "ready";
+  document.addEventListener("outdesign:site-theme", ((event: CustomEvent<SiteTheme>) => {
+    if (authoring || !["light", "dark"].includes(event.detail)) return;
+    state.preferences.theme = event.detail;
+    sync();
+  }) as EventListener, { signal: abort.signal });
   live.set(root, dispose);
   sync();
   tab(0);

@@ -17,6 +17,7 @@ export async function workLabTrackingRegression({ browser, origin }) {
     held.push(await stage.evaluate(el => ({ error: +el.dataset.trackingError, dt: +el.dataset.frameDelta, position: el.dataset.arrayPosition })));
   }
   await page.keyboard.up("ArrowDown");
+  assert.ok(Number(await stage.getAttribute("data-movement-pulses")) > 15, "Repeated movement produces waves before selection standby completes");
   assert.ok(Math.max(...held.slice(4).map(n => n.error)) < 2.4, "Held navigation keeps the camera track within two adjacent cells");
   await page.waitForFunction(() => +document.querySelector(".lab-stage").dataset.trackingError < .015);
   const bounds = await stage.boundingBox();
@@ -33,6 +34,19 @@ export async function workLabTrackingRegression({ browser, origin }) {
   const dt = dragged.map(n => n.dt).sort((a, b) => a - b);
   assert.ok(dt[Math.floor(dt.length / 2)] > .009, "Repeated input must not reset the renderer clock between frames");
   assert.ok(dragged.at(-1).frames > dragged[0].frames + 15, "Rendering continues while the pointer remains held");
+  await page.waitForFunction(() => document.querySelector(".lab-stage")?.dataset.selectionPhase === "waiting");
+  assert.equal(await stage.getAttribute("data-selection-material"), "archive");
+  await page.mouse.move(bounds.x + bounds.width * .35, bounds.y + bounds.height * .45);
+  await page.mouse.down();
+  await page.waitForTimeout(650);
+  assert.equal(await stage.getAttribute("data-selection-phase"), "tracking", "Holding input cancels the pending selection standby");
+  assert.equal(await stage.getAttribute("data-selection-material"), "archive", "Held navigation never swaps to glass materials");
+  await page.mouse.up();
+  await page.waitForFunction(() => document.querySelector(".lab-stage")?.dataset.selectionPhase === "ready");
+  assert.equal(await stage.getAttribute("data-selection-material"), "archive", "Settled selections retain the original array color");
+  assert.equal(await stage.getAttribute("data-top-color"), "#969894");
+  await page.getByRole("button", { name: "開啟作品", exact: true }).click();
+  await page.waitForFunction(() => document.querySelector(".lab-stage")?.dataset.selectionMaterial === "glass");
   await writeFile("artifacts/work-tracking-proof.json", JSON.stringify({ heldMaxError: Math.max(...held.map(n => n.error)), draggedMaxError: Math.max(...dragged.map(n => n.error)), medianFrameDelta: dt[Math.floor(dt.length / 2)], held, dragged }, null, 2));
   await context.close();
 }

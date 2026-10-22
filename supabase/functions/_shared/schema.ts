@@ -338,6 +338,7 @@ export const workspaceSchema = z
 export const workLabSchema = z.object({
   parameters: z.object({
     coverScale: z.number().min(.35).max(.82),
+    selectionDelay: z.number().min(0).max(2).default(.45),
     selectionSpeed: z.number().min(2).max(16),
     cameraFollow: z.number().min(5).max(40),
     cameraTransition: z.number().min(2).max(20),
@@ -393,12 +394,14 @@ export const workLabSchema = z.object({
     liner: z.string().regex(/^#[0-9a-f]{6}$/i),
     accent: z.string().regex(/^#[0-9a-f]{6}$/i),
     glass: z.string().regex(/^#[0-9a-f]{6}$/i),
+    top: z.string().regex(/^#[0-9a-f]{6}$/i).default("#969894"),
     darkShell: z.string().regex(/^#[0-9a-f]{6}$/i),
     darkFrame: z.string().regex(/^#[0-9a-f]{6}$/i),
     darkBack: z.string().regex(/^#[0-9a-f]{6}$/i),
     darkLiner: z.string().regex(/^#[0-9a-f]{6}$/i),
     darkAccent: z.string().regex(/^#[0-9a-f]{6}$/i),
     darkGlass: z.string().regex(/^#[0-9a-f]{6}$/i),
+    darkTop: z.string().regex(/^#[0-9a-f]{6}$/i).default("#484d52"),
   }).strict(),
 }).strict();
 

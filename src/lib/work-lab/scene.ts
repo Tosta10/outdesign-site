@@ -29,6 +29,7 @@ import {
   smooth,
 } from "./motion";
 export type SceneState = {
+  pointerActive: boolean;
   navigationUntil: number;
   config: WorkLabConfig;
   authoring?: boolean;
@@ -59,6 +60,7 @@ export function createLabScene(
     canvas,
     antialias: true,
     alpha: true,
+    preserveDrawingBuffer: Boolean(state.authoring && host.ownerDocument !== document),
     powerPreference: "low-power",
   });
   const gl = renderer.getContext(),
@@ -160,18 +162,15 @@ export function createLabScene(
       "#include <color_fragment>\ndiffuseColor.rgb *= mix(vec3(0.68,0.64,0.56),vec3(1.0),smoothstep(0.0,1.0,panelHeight));",
     );
   };
+  const topMaterial = new T.MeshStandardMaterial({ color: 0x969894, metalness: .08, roughness: .72 });
   const body = new T.InstancedMesh(
     new T.BoxGeometry(layout.width, layout.height, layout.depth),
     shell,
     count,
   );
   const edges = new T.InstancedMesh(
-    new T.BoxGeometry(layout.width + 0.02, 0.035, layout.depth + 0.025),
-    new T.MeshStandardMaterial({
-      color: 0xfffdf5,
-      roughness: 0.2,
-      metalness: 0.1,
-    }),
+    new T.BoxGeometry(layout.width - .16, .012, .04),
+    topMaterial,
     count,
   );
   const pins = new T.InstancedMesh(
@@ -250,7 +249,9 @@ export function createLabScene(
     rowSpring = { value: state.row, velocity: 0 };
   const shoulder = { value: state.row, velocity: 0 },
     laneFocus = { value: state.lane, velocity: 0 },
-    lift = { value: 0.4, velocity: 0 };
+    lift = { value: 0, velocity: 0 };
+  let settledSince = 0;
+  const retiringLifts = new Map<string, { value: number; velocity: number }>();
   let activeCell = { lane: state.lane, row: state.row };
   let active = `${itemAtCell(state.items, state.lane, state.row).key}:${state.lane}:${state.row}`;
   let model = makeObject(
@@ -274,6 +275,7 @@ export function createLabScene(
   const outgoing: Returning[] = [];
   let pulses: { lane: number; row: number; time: number }[] = [],
     idleGain = 0,
+    observedWave = state.wave,
     lastInteraction = performance.now(),
     hoverCell: { lane: number; row: number } | null = null;
   const hoverLifts = new Map<string, number>();
@@ -282,7 +284,9 @@ export function createLabScene(
   const paperColor = new T.Color(0xe8e5df),
     nightColor = new T.Color(0x152027),
     shellPaper = new T.Color(0xe1dcd1),
-    shellNight = new T.Color(0x7a8f94);
+    shellNight = new T.Color(0x7a8f94),
+    topPaper = new T.Color(0x969894),
+    topNight = new T.Color(0x484d52);
   let quality = "",
     theme = "",
     composer: EffectComposer | null = null;
@@ -321,6 +325,8 @@ export function createLabScene(
       configured = state.config;
       shellPaper.set(state.config.palette.shell);
       shellNight.set(state.config.palette.darkShell);
+      topPaper.set(state.config.palette.top);
+      topNight.set(state.config.palette.darkTop);
       configureObject(model, state.config);
       outgoing.forEach(old => configureObject(old.model, state.config));
       host.dataset.coverScale = String(state.config.parameters.coverScale);
@@ -338,7 +344,7 @@ export function createLabScene(
         Math.min(
           devicePixelRatio,
           software
-            ? 0.75
+            ? 0.5
             : quality === "high"
               ? 1.75
               : quality === "low"
@@ -399,7 +405,7 @@ export function createLabScene(
       stopRendering();
       return;
     }
-    const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
+    const dt = Math.min(1, Math.max(0.001, (now - last) / 1000));
     if (quality === "low" && now - lastDraw < 32) return;
     last = now;
     lastDraw = now;
@@ -420,6 +426,8 @@ export function createLabScene(
     if (scene.fog instanceof T.Fog)
       scene.fog.color.copy(scene.background as T.Color);
     shell.color.lerpColors(shellPaper, shellNight, themeAmount);
+    topMaterial.color.lerpColors(topPaper, topNight, themeAmount);
+    host.dataset.topColor = `#${topMaterial.color.getHexString()}`;
     applyObjectTheme(model, themeAmount);
     outgoing.forEach(old => applyObjectTheme(old.model, themeAmount));
     host.dataset.cassetteTheme = themeAmount === 1 ? "dark" : themeAmount === 0 ? "light" : "transition";
@@ -466,11 +474,25 @@ export function createLabScene(
       viewerNavigation ? p.orbitFollow : 1000,
     );
     zoom = relax(zoom, state.zoom, dt, viewerNavigation ? p.zoomFollow : 1000);
+    const selected = itemAtCell(state.items, state.lane, state.row);
+    const selectionKey = `${selected.key}:${state.lane}:${state.row}`;
+    const stable = !state.track && !state.pointerActive && now >= state.navigationUntil &&
+      Math.hypot(lane - state.lane, row - state.row) < .05 && active === selectionKey;
+    if (!stable) settledSince = 0;
+    else if (!settledSince) settledSince = now;
+    const selectionReady = state.mode !== "browse" || stable && now - settledSince >= p.selectionDelay * 1000;
+    host.dataset.selectionPhase = state.mode !== "browse" ? "opening" : !stable ? "tracking" : selectionReady ? "ready" : "waiting";
+    // Browse selections retain the exact instanced material. Only an explicit
+    // open enters the glass renderer, so traversed cards never flash a new color.
+    for (const [key, old] of retiringLifts) {
+      damp(old, 0, motion ? p.returnSpeed : 1000, dt);
+      if (old.value < .0001) retiringLifts.delete(key);
+    }
     const aligning =
       state.mode === "browse" && Math.hypot(turnX, turnY) > 0.005;
     damp(
       lift,
-      state.mode !== "browse" ? 4.05 : aligning ? lift.value : 0.4,
+      state.mode !== "browse" ? 4.05 : aligning ? lift.value : selectionReady ? .4 : 0,
       detailMotion ? p.extractionSpeed : 1000,
       dt,
     );
@@ -481,14 +503,17 @@ export function createLabScene(
           ? detail
           : smooth((lift.value - 0.4) / 3.65);
     detail = relax(detail, cameraTarget, dt, detailMotion ? p.cameraTransition : 1000);
-    const selected = itemAtCell(state.items, state.lane, state.row);
-    const selectionKey = `${selected.key}:${state.lane}:${state.row}`;
     if (active !== selectionKey) {
       model.pieces.forEach((part) => {
         part.position.set(0, 0, 0);
         part.scale.setScalar(1);
       });
-      outgoing.push({
+      if (!model.object.visible) {
+        retiringLifts.set(`${activeCell.lane}:${activeCell.row}`, { value: lift.value, velocity: 0 });
+        while (retiringLifts.size > 16) retiringLifts.delete(retiringLifts.keys().next().value!);
+        scene.remove(model.object);
+        disposeObject(model.object);
+      } else outgoing.push({
         model,
         ...activeCell,
         lift: { value: lift.value, velocity: lift.velocity },
@@ -501,6 +526,8 @@ export function createLabScene(
       }
       active = selectionKey;
       activeCell = { lane: state.lane, row: state.row };
+      retiringLifts.delete(`${state.lane}:${state.row}`);
+      settledSince = 0;
       lastInteraction = now;
       pendingPulse = { ...activeCell };
       lift.value = 0;
@@ -517,7 +544,14 @@ export function createLabScene(
       scene.add(model.object);
       reveal = 0;
     }
-    pulses = pulses.slice(-16).filter((pulse) => now - pulse.time < 3200);
+    if (state.wave !== observedWave) {
+      observedWave = state.wave;
+      if (motionAllowed(state.preferences, "selectionWave")) {
+        pulses.push({ lane: state.track?.lane ?? state.lane, row: state.track?.row ?? state.row, time: now });
+        host.dataset.movementPulses = String(Number(host.dataset.movementPulses || 0) + 1);
+      }
+    }
+    pulses = pulses.slice(-6).filter((pulse) => now - pulse.time < 3200);
     idleGain = relax(
       idleGain,
       state.mode === "browse" && now - lastInteraction > 2500 ? 1 : 0,
@@ -640,7 +674,9 @@ export function createLabScene(
       pulses.push({ ...pendingPulse, time: now });
       pendingPulse = null;
     }
+    model.object.visible = state.mode !== "browse" || detail > .001;
     model.object.scale.set(1.5, 1, 1);
+    host.dataset.selectionMaterial = model.object.visible ? "glass" : "archive";
     const depths = [-0.65, 1.65, 0.55, 0.1, -1.15, 2.2];
     model.pieces.forEach((part, i) => {
       part.position.z = state.mode === "inspect" ? depths[i] * explode * p.explosionDistance : 0;
@@ -661,10 +697,10 @@ export function createLabScene(
           r = Math.floor(row) + z;
         cells[index] = { lane: l, row: r };
         const isSelected =
-          (l === state.lane && r === state.row) ||
+          (model.object.visible && l === state.lane && r === state.row) ||
           outgoing.some((old) => old.lane === l && old.row === r);
         const px = (l - lane) * layout.columnGap,
-          py = field(r, l) + hoverLift(l, r),
+          py = field(r, l) + hoverLift(l, r) + (l === state.lane && r === state.row && !model.object.visible ? lift.value : retiringLifts.get(`${l}:${r}`)?.value || 0),
           pz = (r - row) * layout.rowGap;
         const tilt =
           (field(r + 0.5, l) - field(r - 0.5, l)) * 0.024 * (1 - detail);
@@ -794,6 +830,7 @@ export function createLabScene(
     host.dataset.returning = String(outgoing.length);
     host.dataset.lift = lift.value.toFixed(3);
     host.dataset.wave = field(state.row, state.lane + 1).toFixed(4);
+    host.dataset.topGap = String(layout.rowGap - layout.depth);
     host.dataset.arrayOverlap = String(layout.rowGap < layout.depth);
     host.dataset.arrayPosition = `${lane.toFixed(3)},${row.toFixed(3)}`;
     host.dataset.frames = String(Number(host.dataset.frames || 0) + 1);
@@ -801,7 +838,8 @@ export function createLabScene(
       !motion &&
       themeAmount === targetTheme &&
       Math.abs(detail - Number(state.mode !== "browse")) < 0.0001 &&
-      outgoing.length === 0 &&
+      outgoing.length === 0 && retiringLifts.size === 0 &&
+      selectionReady && Math.abs(lift.value - (state.mode !== "browse" ? 4.05 : .4)) < .0001 &&
       Math.abs(explode - Number(state.exploded)) < 0.0001 &&
       Math.abs(lane - (state.track?.lane ?? state.lane)) < 0.0001 &&
       Math.abs(row - (state.track?.row ?? state.row)) < 0.0001 &&
@@ -838,7 +876,7 @@ export function createLabScene(
     );
     ray.setFromCamera(pointer, camera);
     const hit = ray.intersectObjects(
-      [body, model.object, ...outgoing.map((old) => old.model.object)],
+      [body, ...(model.object.visible ? [model.object] : []), ...outgoing.map((old) => old.model.object)],
       true,
     )[0];
     if (!hit) return null;

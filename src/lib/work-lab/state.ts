@@ -81,7 +81,7 @@ export function nearest(value: number, around: number, period: number) {
 export function relax(current: number, target: number, dt: number, speed = 10) {
   return (
     target +
-    (current - target) * Math.exp(-speed * Math.min(0.05, Math.max(0, dt)))
+    (current - target) * Math.exp(-speed * Math.min(1, Math.max(0, dt)))
   );
 }
 export function pulse(distance: number, age: number) {

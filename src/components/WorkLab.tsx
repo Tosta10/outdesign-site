@@ -1,3 +1,4 @@
+import { GearIcon } from "./GearIcon";
 import { useEffect, useRef, type CSSProperties } from "react";
 import { elementProps, presentationCopy } from "../lib/presentation";
 import { resolveWorkLabConfig } from "../../supabase/functions/_shared/work-lab-config";
@@ -81,7 +82,7 @@ export function WorkLab({
           </button>
           <button {...layer("action-settings-1")} data-lab-action="settings" aria-label="開啟展示設定">
             <span className="lab-settings-glyph" aria-hidden="true">
-              ◷
+              <GearIcon />
             </span>
             <small>{copy("settings")}</small>
           </button>
@@ -445,7 +446,7 @@ export function WorkLab({
           </button>
         </header>
         <label>
-          明暗配色
+          全站配色
           <select data-lab-setting="theme">
             <option value="dark">深色</option>
             <option value="light">淺色</option>
@@ -500,7 +501,7 @@ export function WorkLab({
           />
         </label>
         <p>
-          音訊在啟用後由瀏覽器即時合成；不載入音檔。動態效果遵循系統的減少動態設定。
+          配色會同步至全站所有頁面。音訊在啟用後由瀏覽器即時合成；不載入音檔。動態效果遵循系統的減少動態設定。
         </p>
       </dialog>
       <noscript>
