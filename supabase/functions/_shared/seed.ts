@@ -19,47 +19,7 @@ export const initialContent: SiteContent = {
     image: "/assets/lunar-landscape.webp",
     alt: "銀色月光照亮黑色山脈與遠方行星",
   },
-  projects: [
-    {
-      id: "1ee8784a-e0bf-42ee-a8a1-b56718272701",
-      title: "Quiet Interfaces",
-      category: "設計",
-      description:
-        "讓介面退後一步，讓內容與使用者走到前面。關於資訊層級、留白與閱讀節奏的介面概念。",
-      year: "2026",
-      image: "/assets/work-quiet.svg",
-      alt: "深黑背景上的極簡排版介面概念",
-      url: "",
-      tone: "lilac",
-      demo: true,
-    },
-    {
-      id: "1ee8784a-e0bf-42ee-a8a1-b56718272702",
-      title: "Field Notes",
-      category: "開發",
-      description:
-        "把零散靈感整理成一個可以慢慢生長的空間。以輕量、易讀與容易維護為出發點的創作實驗。",
-      year: "2026",
-      image: "/assets/work-notes.svg",
-      alt: "暖灰色紙張與黑色記事介面的組合",
-      url: "",
-      tone: "warm",
-      demo: true,
-    },
-    {
-      id: "1ee8784a-e0bf-42ee-a8a1-b56718272703",
-      title: "In Between",
-      category: "實驗",
-      description:
-        "探索材質、光與數位畫面的邊界。一組以純粹幾何和少量色彩建立的視覺研究。",
-      year: "2026",
-      image: "/assets/work-between.svg",
-      alt: "黑色背景上的銀色幾何與虹彩光線",
-      url: "",
-      tone: "silver",
-      demo: true,
-    },
-  ],
+  projects: [],
   notes: [
     {
       id: "2ee8784a-e0bf-42ee-a8a1-b56718272701",

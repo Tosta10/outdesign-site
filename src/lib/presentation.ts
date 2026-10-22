@@ -1,9 +1,11 @@
+import { labCopyDefaults } from "./work-lab/copy";
 import type {
   Appearance,
   SiteContent,
 } from "../../supabase/functions/_shared/schema";
 import type { CSSProperties } from "react";
 export const copyDefaults: Record<string, string> = {
+  ...labCopyDefaults,
   "work.eyebrow": "01 / SELECTED WORK",
   "notes.eyebrow": "02 / NOTES & THOUGHTS",
   "about.eyebrow": "03 / A LITTLE ABOUT ME",

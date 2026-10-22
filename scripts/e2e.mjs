@@ -1,3 +1,7 @@
+import { siteThemeRegression } from "./site-theme-regression.mjs";
+import { pageLoadingRegression } from "./page-loading-regression.mjs";
+import { workLabAuthorRegression } from "./work-lab-author-regression.mjs";
+import { workLabTrackingRegression } from "./work-lab-tracking-regression.mjs";
 import { chromium } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { spawn } from "node:child_process";
@@ -6,6 +10,7 @@ import { basename, join, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { createServer as createPortProbe } from "node:net";
 import assert from "node:assert/strict";
+import { workLabRegression } from "./work-lab-regression.mjs";
 import { studioRegression } from "./studio-regression.mjs";
 import { startLocalApi } from "../server/local-api.mjs";
 
@@ -220,18 +225,10 @@ try {
   }
   await page.setViewportSize({ width: 1440, height: 1080 });
   await page.goto(`${origin}/work/`, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "設計", exact: true }).click();
-  await settleCanvas();
-  assert.equal(await page.locator(".work-card:visible").count(), 1);
-  await page.getByRole("button", { name: /^全部/ }).click();
-  await settleCanvas();
-  assert.equal(await page.locator(".work-card:visible").count(), 3);
-  await page
-    .getByRole("button", { name: "查看作品：Quiet Interfaces" })
-    .click();
-  await settleCanvas();
-  assert.equal(await page.getByRole("dialog").isVisible(), true);
-  await page.keyboard.press("Escape");
+  await page.locator("[data-work-lab][data-engine]").waitFor();
+  assert.equal(await page.locator(".work-card").count(),0,"Old portfolio fields start empty");
+  assert.equal(await page.locator("[data-work-lab]").getAttribute("data-empty"),"true");
+  assert.equal(await page.locator("[data-work-lab]").getAttribute("data-mode"),"browse");
   await page.goto(`${origin}/journal/`, { waitUntil: "networkidle" });
   await page.locator(".note-item summary").first().click();
   await settleCanvas();
@@ -308,6 +305,11 @@ try {
     password1,
     password2,
   });
+  await pageLoadingRegression({ browser, origin });
+  await workLabRegression({ page, api, origin });
+  await workLabTrackingRegression({ browser, origin });
+  await workLabAuthorRegression({ page, api, password1, password2 });
+  await siteThemeRegression({ page, origin });
   assert.deepEqual(errors, []);
   const results = {
     viewports,

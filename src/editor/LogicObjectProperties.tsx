@@ -3,6 +3,7 @@ import type {
   Selection,
   SiteContent,
 } from "../../supabase/functions/_shared/schema";
+import { WorkLabPanel } from "./WorkLabPanel";
 import { SourceProperties } from "./LayerProperties";
 import { PresentationPanel } from "./PresentationPanel";
 import { AppearanceFields } from "./AppearanceFields";
@@ -26,6 +27,7 @@ export function LogicObjectProperties({
   return (
     <details className="logic-object-properties">
       <summary>物件內容與外觀</summary>
+      {(target === "projects" || target === "element:work" || target.startsWith("element:lab-")) && <WorkLabPanel content={content} update={update} />}
       {node ? (
         <div className="logic-properties">
           <label>

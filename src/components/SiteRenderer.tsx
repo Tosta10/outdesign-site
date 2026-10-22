@@ -1,3 +1,6 @@
+import "../styles/site-theme.css";
+import { SiteSettings } from "./SiteSettings";
+import { GearIcon } from "./GearIcon";
 import type { CSSProperties } from "react";
 import {
   defaultDesign,
@@ -6,6 +9,7 @@ import {
 import { elementProps } from "../lib/presentation";
 import { assetUrl } from "../lib/content";
 import { CanvasPanels } from "./CanvasPanels";
+import { WorkLab } from "./WorkLab";
 import { Icon } from "./Icon";
 import { EditableText } from "./EditableText";
 import { SourceValue } from "./SourceValue";
@@ -107,10 +111,79 @@ export function SiteRenderer({
     ["about", "關於", "About & contact"],
     ["resources", "資源", "Resources"],
   ] as const;
+  if (page === "work")
+    return (
+      <div className="site page-work" data-site-theme={c.workLab?.options.theme || "light"} data-editing={editing} style={styles}>
+        <a className="skip-link" href="#main">
+          跳至主要內容
+        </a>
+        <main id="main">
+          <section
+            id="work"
+            className="work-section"
+            data-layout="section:work"
+            {...elementProps(c, "work", editing)}
+            data-edit={editing ? "projects" : undefined}
+          >
+            <WorkLab content={c} editing={editing} imageUrl={img} homeUrl={url()} />
+          </section>
+          <div className="lab-author-overlay">{panels}</div>
+        </main>
+        <dialog
+          className="nav-drawer"
+          id="site-navigation"
+          aria-label="網站選單"
+        >
+          <div className="drawer-top">
+            <span>OUTDESIGN / MENU</span>
+            <button data-close-dialog aria-label="關閉選單">
+              <Icon name="close" />
+            </button>
+          </div>
+          <nav aria-label="主要導覽">
+            {links
+              .filter(([key]) => key !== "journal" || c.settings.showNotes)
+              .map(([key, label, english], i) => (
+                <a
+                  key={key}
+                  data-page-target={key}
+                  href={url(key === "home" ? "" : key)}
+                  aria-current={key === page ? "page" : undefined}
+                >
+                  <span className="nav-index">0{i + 1}</span>
+                  <span>
+                    {label}
+                    <small>{english}</small>
+                  </span>
+                  <Icon name="diagonal" />
+                </a>
+              ))}
+          </nav>
+          <button className="site-settings-button" {...elementProps(c, "lab-action-settings-1", editing)} data-lab-settings-open aria-label="開啟展示設定"><GearIcon /><span>設定</span></button>
+        </dialog>
+        {!editing &&
+          c.workspace?.scripts?.some(
+            (script) => script.page === page && script.enabled,
+          ) && (
+            <script
+              type="application/json"
+              data-site-logic
+              dangerouslySetInnerHTML={{
+                __html: JSON.stringify(
+                  c.workspace.scripts.filter(
+                    (script) => script.page === page && script.enabled,
+                  ),
+                ).replaceAll("<", "\\u003c"),
+              }}
+            />
+          )}
+      </div>
+    );
   return (
     <div
       className={`site theme-${c.settings.theme === "verdant" ? "verdant" : "prism"} page-${page}`}
       style={c.design || pageLayout ? styles : undefined}
+      data-site-theme={c.workLab?.options.theme || "dark"}
       data-card-effect={effects.card}
       data-tilt={effects.tilt}
       data-damping={effects.damping}
@@ -162,7 +235,7 @@ export function SiteRenderer({
               />
               {value("settings.name")}
             </a>
-            <div className="header-actions">
+            <nav className="header-actions" aria-label="網站導覽工具">
               <button
                 {...elementProps(c, "menu-button", editing)}
                 className="menu-toggle"
@@ -174,7 +247,7 @@ export function SiteRenderer({
                 <span>{text("menu.label")}</span>
                 <Icon name="menu" size={20} />
               </button>
-            </div>
+            </nav>
           </header>
           {pageLayout?.builtins === false ? null : page === "home" ? (
             <section
@@ -267,23 +340,56 @@ export function SiteRenderer({
                     <span>{text("featured.meta")}</span>
                   </div>
                   <div className="featured-body">
-                    <img
-                      {...elementProps(
-                        c,
-                        `field-projects-${first.id}-image`,
-                        editing,
-                      )}
-                      src={img(first.image)}
-                      alt={first.alt}
-                      width="340"
-                      height="220"
-                      loading="lazy"
-                    />
+                    {first.image ? (
+                      <img
+                        {...elementProps(
+                          c,
+                          `field-projects-${first.id}-image`,
+                          editing,
+                        )}
+                        src={img(first.image)}
+                        alt={first.alt}
+                        width="340"
+                        height="220"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="lab-feature-symbol" aria-hidden="true">
+                        ◈
+                      </div>
+                    )}
                     <div>
                       <h2>{value(`projects.${first.id}.title`)}</h2>
                       <p>{value(`projects.${first.id}.description`)}</p>
                       <span className="text-link">
                         {text("featured.link")} <Icon name="arrow" size={14} />
+                      </span>
+                    </div>
+                  </div>
+                </a>
+              )}
+              {!first && (
+                <a
+                  className="featured-card glass-surface"
+                  data-page-target="work"
+                  href={url("work")}
+                  {...elementProps(c, "work-observatory", editing)}
+                >
+                  <div className="card-meta">
+                    <span>
+                      02 <i />
+                    </span>
+                    <span>INTERACTIVE STUDY</span>
+                  </div>
+                  <div className="featured-body">
+                    <div className="lab-feature-symbol" aria-hidden="true">
+                      ◈
+                    </div>
+                    <div>
+                      <h2>物件研究室</h2>
+                      <p>讓想法，有了形狀。探索即時生成的結構、光線與運動。</p>
+                      <span className="text-link">
+                        進入作品 <Icon name="arrow" size={14} />
                       </span>
                     </div>
                   </div>
@@ -307,21 +413,14 @@ export function SiteRenderer({
             >
               <p className="eyebrow">
                 OUTDESIGN /{" "}
-                {page === "work"
-                  ? "SELECTED WORK"
-                  : page === "journal"
-                    ? "JOURNAL"
-                    : page === "resources"
-                      ? "RESOURCES"
-                      : "ABOUT"}
+                {page === "journal"
+                  ? "JOURNAL"
+                  : page === "resources"
+                    ? "RESOURCES"
+                    : "ABOUT"}
               </p>
               <h1>
-                {page === "work" ? (
-                  <>
-                    {text("intro.work.first")}
-                    <em>{text("intro.work.second")}</em>
-                  </>
-                ) : page === "journal" ? (
+                {page === "journal" ? (
                   <>
                     {text("intro.journal.first")}
                     <em>{text("intro.journal.second")}</em>
@@ -339,14 +438,8 @@ export function SiteRenderer({
                 )}
               </h1>
               <p>{text(`intro.${page}.description`)} </p>
-              <span className="page-intro-number">
-                {page === "work"
-                  ? "02"
-                  : page === "journal"
-                    ? "03"
-                    : page === "resources"
-                      ? "05"
-                      : "04"}
+              <span className="page-intro-number" aria-hidden="true">
+                {page === "journal" ? "03" : page === "resources" ? "05" : "04"}
               </span>
             </div>
           )}
@@ -385,7 +478,9 @@ export function SiteRenderer({
                 </a>
               ))}
           </nav>
+          <SiteSettings triggerOnly />
         </dialog>
+        <SiteSettings dialogOnly />
         {pageLayout?.position === "before" && panels}
         <div className="page-content">
           {(pageLayout?.builtins === false ? [] : sections).map((section) => (

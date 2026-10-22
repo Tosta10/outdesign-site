@@ -1,13 +1,25 @@
+import { applySiteTheme, savedSiteTheme, setSiteTheme, type SiteTheme } from "./site-theme";
 import { initEffects } from "./effects";
+import { initPageLoading } from "./page-loading";
 export function initViewer(root: Document | HTMLElement): () => void {
   if (root.querySelector('.site[data-editing="true"]')) return () => {};
   const disposeEffects = initEffects(root);
   const abort = new AbortController();
+  const workLabs: (() => void)[] = [];
+  const workReady = [...root.querySelectorAll<HTMLElement>("[data-work-lab]")].map(async (element) => {
+    return await import("./work-lab/index").then(async ({ initWorkLab }) => {
+      if (abort.signal.aborted) return;
+      const dispose = await initWorkLab(element);
+      if (abort.signal.aborted) dispose(); else workLabs.push(dispose);
+    }).catch(() => { element.dataset.engine = "fallback"; });
+  });
+  const disposeLoading = root === document ? initPageLoading(Promise.all(workReady)) : () => {};
   let disposeLogic: (() => void) | undefined;
   const logicSource = root.querySelector("[data-site-logic]")?.textContent;
   if (logicSource)
     import("./logic-runtime")
-      .then(({ initLogic }) => {
+      .then(async ({ initLogic }) => {
+        await Promise.all(workReady);
         if (!abort.signal.aborted) {
           try {
             disposeLogic = initLogic(root, JSON.parse(logicSource));
@@ -21,6 +33,20 @@ export function initViewer(root: Document | HTMLElement): () => void {
       });
   const listen = (element: EventTarget, type: string, handler: EventListener) =>
     element.addEventListener(type, handler, { signal: abort.signal });
+  const site = root.querySelector<HTMLElement>(".site");
+  const defaultTheme: SiteTheme = site?.dataset.siteTheme === "light" ? "light" : "dark";
+  applySiteTheme(root, savedSiteTheme() || defaultTheme);
+  listen(document, "outdesign:site-theme", ((event: CustomEvent<SiteTheme>) => {
+    if (event.detail === "light" || event.detail === "dark") applySiteTheme(root, event.detail);
+  }) as EventListener);
+  const settings = root.querySelector<HTMLDialogElement>("[data-site-settings-modal]");
+  root.querySelectorAll<HTMLElement>("[data-site-settings]").forEach(button => listen(button, "click", () => { menu?.close(); settings?.showModal(); }));
+  root.querySelectorAll<HTMLElement>("[data-lab-settings-open]").forEach(button => listen(button, "click", () => {
+    menu?.close();
+    root.querySelector<HTMLElement>("[data-work-lab]")?.dispatchEvent(new Event("outdesign:lab-settings"));
+  }));
+  root.querySelectorAll<HTMLElement>("[data-site-settings-close]").forEach(button => listen(button, "click", () => settings?.close()));
+  root.querySelectorAll<HTMLSelectElement>("[data-site-theme-select]").forEach(select => listen(select, "change", () => setSiteTheme(select.value as SiteTheme)));
   const menu = root.querySelector<HTMLDialogElement>(".nav-drawer");
   const toggle = root.querySelector<HTMLButtonElement>("[data-menu-toggle]");
   if (toggle && menu) {
@@ -127,9 +153,12 @@ export function initViewer(root: Document | HTMLElement): () => void {
   }
   return () => {
     disposeEffects();
+    disposeLoading();
     disposeLogic?.();
+    workLabs.forEach((dispose) => dispose());
     abort.abort();
     audio?.pause();
+    if (settings?.open) settings.close();
     if (menu?.open) menu.close();
     document.documentElement.classList.remove("nav-open");
   };

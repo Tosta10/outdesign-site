@@ -17,7 +17,6 @@
   overflow-wrap: anywhere;
 }
 [data-layer-positioned] {
-  position: relative;
   translate: var(--layer-x, 0px) var(--layer-y, 0px);
   rotate: var(--layer-rotation, 0deg);
 }

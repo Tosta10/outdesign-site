@@ -17,6 +17,26 @@ export type LayerItem = {
   deleted: boolean;
 };
 export const layerNames: Record<string, string> = {
+  "lab-header": "作品頁首",
+  "lab-brand": "展示品牌",
+  "lab-body": "作品內容",
+  "lab-scene": "3D 卡帶場景",
+  "lab-scene-caption": "場景說明",
+  "lab-back": "返回陣列",
+  "lab-object-caption": "卡帶說明",
+  "lab-view-controls": "卡帶控制",
+  "lab-browse-info": "目前作品資訊",
+  "lab-detail": "作品資料",
+  "lab-counter": "作品計數",
+  "lab-navigation": "上下導覽",
+  "lab-hint": "操作提示",
+  "lab-powered": "展示署名",
+  "lab-columns": "分類導覽",
+  "lab-footer": "展示頁尾",
+  "lab-inspection": "360° 檢視介面",
+  "lab-document": "作品文件",
+  "lab-menu": "網站導覽",
+
   header: "頁首",
   brand: "品牌與 Logo",
   "brand-logo": "Logo 圖像",
@@ -39,6 +59,7 @@ export const layerNames: Record<string, string> = {
   "page-intro": "頁面標題",
 };
 export function selectionKey(selection: Selection, page: string): string {
+  if (selection === "projects") return "work";
   if (selection.startsWith("element:")) return selection.slice(8);
   if (selection.startsWith("copy:")) return `copy-${selection.slice(5)}`;
   if (selection.includes(":")) return selection.replace(":", "-");
