@@ -187,6 +187,14 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
       status.textContent = "瀏覽器未允許儲存偏好，本次操作仍可繼續。";
     }
   }
+  function syncAudio() {
+    if (authoring) return;
+    if (state.preferences.sound || state.preferences.ambient)
+      void audio.enable(state.preferences.volume, state.preferences.ambient).catch(() => {});
+    else audio.pause();
+  }
+  root.addEventListener("pointerdown", syncAudio, { signal: abort.signal });
+  root.addEventListener("keydown", syncAudio, { signal: abort.signal });
   const originalLabels = new Map<string, string>();
   function buttonLabel(selector: string, active: boolean, alternate: string) {
     if (authoring) return;
@@ -1257,9 +1265,27 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
     const previous = state.config;
     state.config = command.type === "reset-config" ? baseConfig : patchLabConfig(state.config, command);
     if (previous === state.config) return;
-    state.preferences = command.type === "reset-config" ? structuredClone(initialPreferences) : configuredPreferences(state.config);
-    state.frosted = state.config.options.glass === "frosted";
+    if (command.type === "reset-config" || command.type === "config") {
+      state.preferences = command.type === "reset-config" ? structuredClone(initialPreferences) : configuredPreferences(state.config);
+      state.frosted = state.config.options.glass === "frosted";
+    } else if (command.type === "effect") {
+      state.preferences.effects = { ...state.preferences.effects, [command.key]: state.config.effects[command.key as MotionKey] };
+    } else if (command.type === "parameter" && command.key === "volume") {
+      state.preferences.volume = state.config.parameters.volume;
+    } else if (command.type === "option") {
+      if (command.key === "glass") state.frosted = state.config.options.glass === "frosted";
+      else {
+        const options = state.config.options;
+        const value = options[command.key as keyof typeof options];
+        state.preferences = normalizePreferences({ ...state.preferences,
+          ...(command.key === "motionPreset" ? { motion: true } : {}),
+          [command.key]: command.key === "sound" || command.key === "ambient" ? value === "on" : value,
+        }, media.matches);
+      }
+    }
     // Settings changed through blocks are scoped to this runtime, not visitor storage.
+    if (navigator.userActivation?.hasBeenActive && (command.type === "config" || command.type === "reset-config" ||
+      command.type === "option" && ["sound", "ambient"].includes(command.key) || command.type === "parameter" && command.key === "volume")) syncAudio();
     if (!state.preferences.motion || !state.preferences.effects.boot) skipBoot();
     sync();
   }

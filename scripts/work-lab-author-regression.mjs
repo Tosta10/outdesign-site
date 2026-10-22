@@ -62,8 +62,10 @@ export async function workLabAuthorRegression({ page, api, password1, password2 
   assert.equal(published.content.workLab.parameters.cameraFollow, 32);
   assert.equal(published.content.workLab.palette.shell, "#b5c9bc");
   assert.equal(published.content.workspace.scripts.at(-1).blocks[0].amount, 38);
+  await page.evaluate(() => localStorage.setItem("outdesign.work-lab.preferences.v2", JSON.stringify({ theme: "dark", motionPreset: "system", effects: { boot: false } })));
   await Promise.all([page.waitForEvent("load"), button("登出並關閉編輯器").click()]);
   await page.waitForFunction(() => document.querySelector('.lab-stage')?.dataset.cameraFollow === "38");
+  assert.equal(await page.locator('[data-work-lab]').getAttribute("data-theme"), "dark", "A camera parameter block preserves the visitor's chosen theme");
   assert.equal(await page.locator('[data-copy-key="lab.menu"]').textContent(), "探索導航");
   assert.equal(await page.locator('.lab-header nav > [data-menu-toggle]').count(), 1);
 }
