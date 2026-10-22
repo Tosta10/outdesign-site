@@ -6,6 +6,7 @@ html[data-site-theme="light"], .site[data-site-theme="light"] {
 }
 html[data-site-theme="dark"] { color-scheme: dark; }
 .site-settings-button { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; color: inherit; }
+.nav-drawer > .site-settings-button { width: 100%; justify-content: flex-start; gap: 14px; padding: 18px 0; margin-top: 20px; border-top: 1px solid var(--color-line); font: 16px/1.5 system-ui; }
 .site-settings-button:hover { background: var(--color-line); border-radius: 50%; }
 .site-settings-dialog { width: min(440px, calc(100vw - 32px)); padding: 28px; border: 1px solid var(--color-line); border-radius: 12px; background: var(--color-surface); color: var(--color-text); }
 .site-settings-dialog::backdrop { background: #0008; backdrop-filter: blur(8px); }

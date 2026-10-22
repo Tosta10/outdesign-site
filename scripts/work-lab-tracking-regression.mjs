@@ -9,6 +9,7 @@ export async function workLabTrackingRegression({ browser, origin }) {
   const stage = page.locator(".lab-stage");
   await page.waitForFunction(() => document.querySelector(".lab-stage")?.dataset.ready === "true");
   await stage.focus();
+  const buildsBefore = Number(await stage.getAttribute("data-model-builds"));
   const held = [];
   // Actual repeated keydown messages keep the key held throughout the run.
   for (let n = 0; n < 100; n++) {
@@ -18,7 +19,7 @@ export async function workLabTrackingRegression({ browser, origin }) {
   }
   await page.keyboard.up("ArrowDown");
   assert.ok(Number(await stage.getAttribute("data-movement-pulses")) > 15, "Repeated movement produces waves before selection standby completes");
-  assert.ok(Math.max(...held.slice(4).map(n => n.error)) < 2.4, "Held navigation keeps the camera track within two adjacent cells");
+  assert.ok(Math.max(...held.slice(4).map(n => n.error)) < 1.25, "Held navigation responds within one adjacent cell instead of accumulating spring lag");
   await page.waitForFunction(() => +document.querySelector(".lab-stage").dataset.trackingError < .015);
   const bounds = await stage.boundingBox();
   await page.mouse.move(bounds.x + bounds.width * .35, bounds.y + bounds.height * .45);
@@ -45,6 +46,15 @@ export async function workLabTrackingRegression({ browser, origin }) {
   await page.waitForFunction(() => document.querySelector(".lab-stage")?.dataset.selectionPhase === "ready");
   assert.equal(await stage.getAttribute("data-selection-material"), "archive", "Settled selections retain the original array color");
   assert.equal(await stage.getAttribute("data-top-color"), "#969894");
+  assert.equal(Number(await stage.getAttribute("data-model-builds")), buildsBefore, "Rapid browsing never rebuilds hidden glass models or cover canvases");
+  await page.getByRole("button", { name: "開啟選單", exact: true }).click();
+  await page.locator('.nav-drawer [data-lab-settings-open]').click();
+  await page.getByText("動態效果精細設定", { exact: true }).click();
+  await page.locator('[data-lab-effect="idleWave"]').check();
+  await page.getByRole("button", { name: "關閉展示設定", exact: true }).click();
+  await page.waitForFunction(() => +document.querySelector(".lab-stage").dataset.breathing > .75);
+  const breathBefore = await stage.getAttribute("data-wave");
+  await page.waitForFunction(before => document.querySelector(".lab-stage").dataset.wave !== before, breathBefore);
   await page.getByRole("button", { name: "開啟作品", exact: true }).click();
   await page.waitForFunction(() => document.querySelector(".lab-stage")?.dataset.selectionMaterial === "glass");
   await writeFile("artifacts/work-tracking-proof.json", JSON.stringify({ heldMaxError: Math.max(...held.map(n => n.error)), draggedMaxError: Math.max(...dragged.map(n => n.error)), medianFrameDelta: dt[Math.floor(dt.length / 2)], held, dragged }, null, 2));

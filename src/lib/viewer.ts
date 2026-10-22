@@ -1,5 +1,6 @@
 import { applySiteTheme, savedSiteTheme, setSiteTheme, type SiteTheme } from "./site-theme";
 import { initEffects } from "./effects";
+import { initPageLoading } from "./page-loading";
 export function initViewer(root: Document | HTMLElement): () => void {
   if (root.querySelector('.site[data-editing="true"]')) return () => {};
   const disposeEffects = initEffects(root);
@@ -12,6 +13,7 @@ export function initViewer(root: Document | HTMLElement): () => void {
       if (abort.signal.aborted) dispose(); else workLabs.push(dispose);
     }).catch(() => { element.dataset.engine = "fallback"; });
   });
+  const disposeLoading = root === document ? initPageLoading(Promise.all(workReady)) : () => {};
   let disposeLogic: (() => void) | undefined;
   const logicSource = root.querySelector("[data-site-logic]")?.textContent;
   if (logicSource)
@@ -38,7 +40,11 @@ export function initViewer(root: Document | HTMLElement): () => void {
     if (event.detail === "light" || event.detail === "dark") applySiteTheme(root, event.detail);
   }) as EventListener);
   const settings = root.querySelector<HTMLDialogElement>("[data-site-settings-modal]");
-  root.querySelectorAll<HTMLElement>("[data-site-settings]").forEach(button => listen(button, "click", () => settings?.showModal()));
+  root.querySelectorAll<HTMLElement>("[data-site-settings]").forEach(button => listen(button, "click", () => { menu?.close(); settings?.showModal(); }));
+  root.querySelectorAll<HTMLElement>("[data-lab-settings-open]").forEach(button => listen(button, "click", () => {
+    menu?.close();
+    root.querySelector<HTMLElement>("[data-work-lab]")?.dispatchEvent(new Event("outdesign:lab-settings"));
+  }));
   root.querySelectorAll<HTMLElement>("[data-site-settings-close]").forEach(button => listen(button, "click", () => settings?.close()));
   root.querySelectorAll<HTMLSelectElement>("[data-site-theme-select]").forEach(select => listen(select, "change", () => setSiteTheme(select.value as SiteTheme)));
   const menu = root.querySelector<HTMLDialogElement>(".nav-drawer");
@@ -147,6 +153,7 @@ export function initViewer(root: Document | HTMLElement): () => void {
   }
   return () => {
     disposeEffects();
+    disposeLoading();
     disposeLogic?.();
     workLabs.forEach((dispose) => dispose());
     abort.abort();

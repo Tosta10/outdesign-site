@@ -15,7 +15,7 @@ const canonical = new URL(`${base}${page === 'home' ? '' : page + '/'}`, Astro.s
 const title = pageTitle(content, page);
 ---
 <!doctype html>
-<html lang="zh-Hant" data-transition={content.interactions?.transition || "fade"}>
+<html lang="zh-Hant" data-site-theme={content.workLab?.options.theme || (page === 'work' ? 'light' : 'dark')} data-transition={content.interactions?.transition || "fade"}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -32,8 +32,23 @@ const title = pageTitle(content, page);
     {!content.presentation?.logo && <link rel="icon" href={`${base}favicon.ico`} sizes="any" />}
     <link rel="apple-touch-icon" href={content.presentation?.logo ? assetUrl(content.presentation.logo,api,base) : `${base}apple-touch-icon.png`} />
     <title>{title}</title>
+    <script is:inline>
+      try { const theme = localStorage.getItem('outdesign.site.theme.v1'); if (theme === 'light' || theme === 'dark') document.documentElement.dataset.siteTheme = theme; } catch {}
+    </script>
+    <style is:inline>
+      #page-loader { position:fixed;inset:0;z-index:100000;display:grid;place-content:center;gap:20px;padding:24px;background:#eeede7;color:#202923;text-align:center;font:12px/1.6 system-ui;letter-spacing:.12em;transition:opacity .22s; }
+      html[data-site-theme="dark"] #page-loader { background:#11161c;color:#efefe9; }
+      #page-loader strong { font-size:22px;letter-spacing:.08em; }
+      #page-loader i { width:180px;height:2px;overflow:hidden;background:currentColor;opacity:.5;clip-path:inset(0 60% 0 0);animation:page-loading 1.4s ease-in-out infinite alternate; }
+      body:not([data-page-state="ready"]) #public-site { opacity:0;visibility:hidden; }
+      body[data-page-state="ready"] #page-loader { opacity:0;visibility:hidden;pointer-events:none; }
+      @keyframes page-loading { to { clip-path:inset(0 0 0 60%); } }
+      @media(prefers-reduced-motion:reduce) { #page-loader { transition:none; } #page-loader i { animation:none;clip-path:none; } }
+    </style>
+    <noscript><style>#page-loader { display:none; } body #public-site { opacity:1!important;visibility:visible!important; }</style></noscript>
   </head>
-  <body data-api={api} data-base={base} data-version={version} data-page={page}>
+  <body data-page-state="loading" data-api={api} data-base={base} data-version={version} data-page={page}>
+    <div id="page-loader" data-page-loader role="status" aria-live="polite"><strong>OUTDESIGN</strong><span>正在載入介面 / LOADING</span><i aria-hidden="true"></i></div>
     <div id="public-site"><SiteRenderer content={content} api={api} base={base} page={page} /></div>
     <div id="studio-root"></div>
     <script>

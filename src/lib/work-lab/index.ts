@@ -539,7 +539,7 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
   function skipBoot() {
     cancelAnimationFrame(bootFrame);
     q(".lab-boot").hidden = true;
-    stage.focus({ preventScroll: true });
+    if (!authoring) stage.focus({ preventScroll: true });
   }
   function boot() {
     cancelAnimationFrame(bootFrame);
@@ -880,6 +880,7 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
       return;
     e.preventDefault();
     if (state.mode === "browse") {
+      if (e.repeat) state.navigationUntil = performance.now() + 220;
       if (e.key === "ArrowLeft" || e.key === "ArrowRight")
         stepColumn(e.key === "ArrowLeft" ? -1 : 1);
       else
@@ -1298,6 +1299,7 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
     sync();
   }
   root.addEventListener("outdesign:lab-command", ((event: CustomEvent<LabCommand>) => command(event.detail)) as EventListener, { signal: abort.signal });
+  root.addEventListener("outdesign:lab-settings", () => showModal(q<HTMLDialogElement>("[data-lab-modal=settings]")), { signal: abort.signal });
   root.dataset.labController = "ready";
   document.addEventListener("outdesign:site-theme", ((event: CustomEvent<SiteTheme>) => {
     if (authoring || !["light", "dark"].includes(event.detail)) return;
@@ -1328,6 +1330,11 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
     q("[data-lab-render-status]").textContent = "WEBGL / LIVE";
     root.dataset.engine = "webgl";
     sync();
+    const bounds = stage.getBoundingClientRect();
+    // An intentionally hidden/offscreen author layer must not hold the whole
+    // public page behind its loading screen waiting for an invisible frame.
+    if (!authoring && !document.hidden && bounds.width > 0 && bounds.height > 0 && bounds.bottom > 0 && bounds.top < innerHeight) await scene.ready;
+    if (disposed) return dispose;
     takeLabCommands(root).forEach(command);
     const hash = location.hash.slice(1);
     if (/^project-[0-9a-f-]{36}$/i.test(hash)) {

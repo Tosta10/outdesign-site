@@ -102,7 +102,10 @@ export function makeObject(
   const printMaterial = new T.MeshBasicMaterial({
     map: texture,
     transparent: true,
-    alphaTest: .01,
+    alphaTest: .035,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
     toneMapped: false,
     side: T.DoubleSide,
   });
@@ -139,7 +142,7 @@ diffuseColor *= mix(odSoft, odSharp, odVisible);
     printMaterial,
     0,
     -0.04,
-    0.234,
+    0.242,
   );
   picture.name = "outdesign-flat-artwork";
   picture.scale.set(.64, .64, 1);

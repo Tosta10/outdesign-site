@@ -1,4 +1,3 @@
-import { GearIcon } from "./GearIcon";
 import { useEffect, useRef, type CSSProperties } from "react";
 import { elementProps, presentationCopy } from "../lib/presentation";
 import { resolveWorkLabConfig } from "../../supabase/functions/_shared/work-lab-config";
@@ -79,12 +78,6 @@ export function WorkLab({
           </button>
           <button {...layer("action-saved-1")} data-lab-action="saved" aria-label="檢視收藏作品">
             {copy("saved")}  <span data-lab-saved-count>00</span>
-          </button>
-          <button {...layer("action-settings-1")} data-lab-action="settings" aria-label="開啟展示設定">
-            <span className="lab-settings-glyph" aria-hidden="true">
-              <GearIcon />
-            </span>
-            <small>{copy("settings")}</small>
           </button>
           <button {...layer("menu")} data-menu-toggle aria-controls="site-navigation" aria-expanded="false" aria-label="開啟選單"><span aria-hidden="true">☰</span><small>{copy("menu")}</small></button>
           <button {...layer("action-fullscreen-1")} data-lab-action="fullscreen" aria-label="全螢幕作品展示">

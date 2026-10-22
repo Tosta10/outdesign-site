@@ -527,7 +527,7 @@ export async function studioRegression({
   await button("繼續編輯").click();
   await label("預覽頁面").selectOption("work");
   await settleCanvas();
-  await page.locator(".editor-canvas [data-lab-action=settings]").click();
+  await page.locator(".editor-canvas [data-menu-toggle]").click();
   assert.equal(
     await page.locator(".editor-canvas .detail-dialog[open]").count(),
     0,

@@ -42,6 +42,11 @@ export async function workLabRegression({ page, api, origin }) {
   await page.goto(`${origin}/work/`, { waitUntil: "networkidle" });
   const root = page.locator("[data-work-lab]"),
     stage = page.locator(".lab-stage");
+  const openSettings = async () => {
+    await page.getByRole("button", { name: "開啟選單", exact: true }).click();
+    await page.locator('.nav-drawer [data-lab-settings-open]').click();
+    await root.locator('[data-lab-modal="settings"]').waitFor({ state: "visible" });
+  };
   await root
     .locator("[data-lab-browse-title]")
     .filter({ hasText: "光的切片" })
@@ -150,13 +155,13 @@ export async function workLabRegression({ page, api, origin }) {
   });
   await root.getByRole("button", { name: "重設視角 ↗", exact: true }).click();
   await root.getByRole("button", { name: "返回作品資料", exact: true }).click();
-  await root.getByRole("button", { name: "開啟展示設定", exact: true }).click();
+  await openSettings();
   await root.locator('[data-lab-setting="theme"]').selectOption("dark");
   await page.waitForFunction(() => document.querySelector(".lab-stage")?.dataset.cassetteTheme === "dark");
   assert.equal(await stage.getAttribute("data-shell-color"), "#11161c", "Theme changes the actual cassette material, including the archive array");
   await root.getByRole("button", { name: "關閉展示設定", exact: true }).click();
   await root.screenshot({ path: "artifacts/work-glass-dark.png" });
-  await root.getByRole("button", { name: "開啟展示設定", exact: true }).click();
+  await openSettings();
   await root.locator('[data-lab-setting="theme"]').selectOption("light");
   await root.locator('[data-lab-setting="quality"]').selectOption("high");
   await root.getByRole("button", { name: "關閉展示設定", exact: true }).click();
@@ -278,7 +283,7 @@ export async function workLabRegression({ page, api, origin }) {
   await page.setViewportSize({ width: 1440, height: 1080 });
   // Exercise the real timeline in addition to the reduced-motion path.
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  await root.getByRole("button", { name: "開啟展示設定", exact: true }).click();
+  await openSettings();
   await root.locator('[data-lab-setting="quality"]').selectOption("medium");
   await root.locator('[data-lab-setting="motion"]').check();
   await root.locator('[data-lab-setting="sound"]').check();
@@ -367,7 +372,7 @@ export async function workLabRegression({ page, api, origin }) {
     () =>
       document.querySelector("[data-work-lab]")?.dataset.revealing === "false",
   );
-  await root.getByRole("button", { name: "開啟展示設定", exact: true }).click();
+  await openSettings();
   await root
     .locator('[data-lab-setting="motionPreset"]')
     .selectOption("system");

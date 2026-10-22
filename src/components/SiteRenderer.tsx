@@ -1,5 +1,6 @@
 import "../styles/site-theme.css";
 import { SiteSettings } from "./SiteSettings";
+import { GearIcon } from "./GearIcon";
 import type { CSSProperties } from "react";
 import {
   defaultDesign,
@@ -158,6 +159,7 @@ export function SiteRenderer({
                 </a>
               ))}
           </nav>
+          <button className="site-settings-button" {...elementProps(c, "lab-action-settings-1", editing)} data-lab-settings-open aria-label="開啟展示設定"><GearIcon /><span>設定</span></button>
         </dialog>
         {!editing &&
           c.workspace?.scripts?.some(
@@ -245,7 +247,6 @@ export function SiteRenderer({
                 <span>{text("menu.label")}</span>
                 <Icon name="menu" size={20} />
               </button>
-              <SiteSettings />
             </nav>
           </header>
           {pageLayout?.builtins === false ? null : page === "home" ? (
@@ -477,7 +478,9 @@ export function SiteRenderer({
                 </a>
               ))}
           </nav>
+          <SiteSettings triggerOnly />
         </dialog>
+        <SiteSettings dialogOnly />
         {pageLayout?.position === "before" && panels}
         <div className="page-content">
           {(pageLayout?.builtins === false ? [] : sections).map((section) => (

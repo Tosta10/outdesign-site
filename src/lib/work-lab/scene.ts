@@ -73,7 +73,7 @@ export function createLabScene(
     antialias: true,
     alpha: true,
     preserveDrawingBuffer: thumbnail,
-    powerPreference: "low-power",
+    powerPreference: thumbnail ? "low-power" : "high-performance",
   });
   const gl = renderer.getContext(),
     debug = gl.getExtension("WEBGL_debug_renderer_info");
@@ -205,6 +205,10 @@ export function createLabScene(
   const ctx = atlasCanvas.getContext("2d")!,
     atlas = new T.CanvasTexture(atlasCanvas);
   atlas.colorSpace = T.SRGBColorSpace;
+  // Atlas mipmaps mix adjacent projects at distant/grazing views. Sample the
+  // padded cells directly so tiny covers cannot acquire neighboring fragments.
+  atlas.generateMipmaps = false;
+  atlas.minFilter = T.LinearFilter;
   atlas.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
   const indices = new Float32Array(count),
     artGeometry = new T.PlaneGeometry(layout.width, layout.height);
@@ -214,10 +218,13 @@ export function createLabScene(
   );
   const artMaterial = new T.MeshBasicMaterial({
     map: atlas,
-    side: T.DoubleSide,
+    side: T.FrontSide,
     color: 0xffffff,
-    transparent: true,
-    alphaTest: .01,
+    transparent: false,
+    alphaTest: .035,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
     toneMapped: false,
   });
   artMaterial.onBeforeCompile = (shader) => {
@@ -266,6 +273,8 @@ export function createLabScene(
   const retiringLifts = new Map<string, { value: number; velocity: number }>();
   let activeCell = { lane: state.lane, row: state.row };
   let active = `${itemAtCell(state.items, state.lane, state.row).key}:${state.lane}:${state.row}`;
+  let modelKey = active;
+  host.dataset.modelBuilds = "1";
   let model = makeObject(
     itemAtCell(state.items, state.lane, state.row),
     false,
@@ -293,6 +302,8 @@ export function createLabScene(
   const hoverLifts = new Map<string, number>();
   let themeAmount = state.preferences.theme === "dark" ? 1 : 0;
   let pendingPulse: { lane: number; row: number } | null = null;
+  let firstFrame = () => {};
+  const rendered = new Promise<void>(resolve => { firstFrame = resolve; });
   const paperColor = new T.Color(0xe8e5df),
     nightColor = new T.Color(0x152027),
     shellPaper = new T.Color(0xe1dcd1),
@@ -457,9 +468,16 @@ export function createLabScene(
     } else {
       // Repeated keys / rapid wheel input get a shorter catch-up without snapping
       // the array. Pointer drag itself already owns the exact projected coordinate.
-      const chase = now < state.navigationUntil ? Math.max(p.selectionSpeed, p.cameraFollow * 3) : p.selectionSpeed;
-      damp(laneSpring, state.lane, trackMotion ? chase : 1000, dt);
-      damp(rowSpring, state.row, trackMotion ? chase : 1000, dt);
+      if (trackMotion && now < state.navigationUntil) {
+        // Held navigation owns the track, as pointer/coasting navigation does in
+        // the source. One short exponential response avoids stacked spring lag.
+        laneSpring.value = relax(laneSpring.value, state.lane, dt, p.cameraFollow * 4);
+        rowSpring.value = relax(rowSpring.value, state.row, dt, p.cameraFollow * 4);
+        laneSpring.velocity = rowSpring.velocity = 0;
+      } else {
+        damp(laneSpring, state.lane, trackMotion ? p.selectionSpeed : 1000, dt);
+        damp(rowSpring, state.row, trackMotion ? p.selectionSpeed : 1000, dt);
+      }
     }
     lane = laneSpring.value;
     row = rowSpring.value;
@@ -523,8 +541,6 @@ export function createLabScene(
       if (!model.object.visible) {
         retiringLifts.set(`${activeCell.lane}:${activeCell.row}`, { value: lift.value, velocity: 0 });
         while (retiringLifts.size > 16) retiringLifts.delete(retiringLifts.keys().next().value!);
-        scene.remove(model.object);
-        disposeObject(model.object);
       } else outgoing.push({
         model,
         ...activeCell,
@@ -544,9 +560,20 @@ export function createLabScene(
       pendingPulse = { ...activeCell };
       lift.value = 0;
       lift.velocity = 0;
+      reveal = 0;
+    }
+    // Browsing uses the instanced archive. Reuse its hidden detail model until
+    // explicit opening, rather than allocating canvases/materials on every key.
+    if (modelKey !== selectionKey && (state.mode !== "browse" || detail > .001 || outgoing.some(old => old.model === model))) {
+      if (!outgoing.some(old => old.model === model)) {
+        scene.remove(model.object);
+        disposeObject(model.object);
+      }
+      modelKey = selectionKey;
+      host.dataset.modelBuilds = String(Number(host.dataset.modelBuilds) + 1);
       host.dataset.imageState = selected.image ? "loading" : "empty";
       model = makeObject(selected, quality === "low", (ready) => {
-        if (alive && active === selectionKey) {
+        if (alive && modelKey === selectionKey) {
           host.dataset.imageState = ready ? "loaded" : "failed";
           invalidate();
         }
@@ -559,18 +586,19 @@ export function createLabScene(
     if (state.wave !== observedWave) {
       observedWave = state.wave;
       if (motionAllowed(state.preferences, "selectionWave")) {
-        pulses.push({ lane: state.track?.lane ?? state.lane, row: state.track?.row ?? state.row, time: now });
+        pulses.push({ lane: state.track?.lane ?? state.lane, row: state.track?.row ?? state.row, time: state.wave });
         host.dataset.movementPulses = String(Number(host.dataset.movementPulses || 0) + 1);
       }
     }
     pulses = pulses.slice(-6).filter((pulse) => now - pulse.time < 3200);
+    const resting = state.mode === "browse" && !state.pointerActive && !state.track && now - lastInteraction > 1200;
     idleGain = relax(
       idleGain,
-      state.mode === "browse" && now - lastInteraction > 2500 ? 1 : 0,
+      state.mode === "browse" ? resting ? 1 : .18 : 0,
       dt,
-      0.8,
+      resting ? .8 : 4,
     );
-    const field = (r: number, l: number) => {
+    const calculateField = (r: number, l: number) => {
       const shoulderHeight =
         settlingWave(r - shoulder.value, 26.56) *
           columnStrength(l, laneFocus.value) -
@@ -587,11 +615,21 @@ export function createLabScene(
       return (
         shoulderHeight +
         (motionAllowed(state.preferences, "idleWave")
-          ? idleWave(r, l, now / 1000 * p.idleSpeed) * idleGain * p.idleAmplitude
+          ? idleWave(r, l, now / 1000 * p.idleSpeed) * idleGain * p.idleAmplitude * 1.5
           : 0) +
         Math.max(-0.6, Math.min(0.6, ripple)) * (1 - detail) * p.waveAmplitude
       );
     };
+    // Cache the source's shared wave surface for both height and tilt.
+    const fieldCache = new Map<number, Map<number, number>>();
+    const field = (r: number, l: number) => {
+      let column = fieldCache.get(l);
+      if (!column) { column = new Map(); fieldCache.set(l, column); }
+      let value = column.get(r);
+      if (value === undefined) { value = calculateField(r, l); column.set(r, value); }
+      return value;
+    };
+    host.dataset.breathing = String(motionAllowed(state.preferences, "idleWave") ? idleGain * p.idleAmplitude : 0);
     const hoverKey = hoverCell ? `${hoverCell.lane}:${hoverCell.row}` : "";
     if (hoverKey && !hoverLifts.has(hoverKey)) hoverLifts.set(hoverKey, 0);
     for (const [key, value] of hoverLifts) {
@@ -739,8 +777,8 @@ export function createLabScene(
           componentMatrix.multiplyMatrices(cellMatrix, dummy.matrix);
           mesh.setMatrixAt(slot, componentMatrix);
         };
-        component(edges, index, 0, layout.height / 2, 0);
-        component(artwork, index, 0, -.04, layout.depth / 2 + 0.006, 0, p.coverScale);
+        component(edges, index, 0, layout.height / 2 + .007, 0);
+        component(artwork, index, 0, -.04, layout.depth / 2 + 0.014, 0, p.coverScale);
         const columnItems = columns[wrap(l, columns.length)].items;
         indices[index] = columnItems[wrap(r, columnItems.length)].id;
         for (let pin = 0; pin < 2; pin++)
@@ -827,6 +865,7 @@ export function createLabScene(
           camera.position.distanceTo(aim);
       composer.render(dt);
     } else renderer.render(scene, camera);
+    firstFrame();
     if (previewSurface && now - previewCaptured >= 200) {
       previewCaptured = now;
       try {
@@ -969,12 +1008,16 @@ export function createLabScene(
     },
     { signal: abort.signal },
   );
+  const imageLoads: Promise<void>[] = [];
   for (const item of state.items) {
     atlasCell(item);
     if (item.image) {
       const image = new Image();
       images.push(image);
+      let finish = () => {};
+      imageLoads.push(new Promise<void>(resolve => { finish = resolve; }));
       image.crossOrigin = "anonymous";
+      image.onerror = finish;
       image.onload = () => {
         if (alive) {
           try {
@@ -983,6 +1026,7 @@ export function createLabScene(
             atlasCell(item);
           }
         }
+        finish();
       };
       image.src = item.image;
     }
@@ -993,6 +1037,7 @@ export function createLabScene(
   host.dataset.ready = "true";
   invalidate();
   return {
+    ready: Promise.all([rendered, Promise.race([Promise.allSettled(imageLoads), new Promise(resolve => setTimeout(resolve, 5000))])]),
     invalidate,
     pick,
     projection,
@@ -1040,6 +1085,7 @@ export function createLabScene(
     },
     dispose() {
       if (!alive) return;
+      firstFrame();
       alive = false;
       abort.abort();
       controls.dispose();
