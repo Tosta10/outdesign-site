@@ -11,9 +11,9 @@ export async function experienceRegression({ browser, origin }) {
     await page.getByRole('button', {name:'開啟全站設定',exact:true}).click();
     await page.getByLabel('全站配色',{exact:true}).selectOption('light');
     await page.getByRole('button',{name:'關閉全站設定',exact:true}).click();
-    await page.locator('.lunar-backdrop').evaluate(image => image.decode());
-    assert.ok((await page.locator('.lunar-backdrop').getAttribute('src')).includes('lunar-dawn-light.webp'));
-    await page.screenshot({path:'artifacts/home-light-new-art.png',fullPage:true});
+    assert.equal(await page.locator('.editorial-site').getAttribute('data-site-theme'),'light');
+    assert.equal(await page.locator('main a[data-page-target="work"]').count(),1);
+    await page.screenshot({path:'artifacts/home-light-editorial.png',fullPage:true});
     await page.goto(`${origin}/work/`,{waitUntil:'networkidle'});
     await page.waitForFunction(() => document.body.dataset.pageState === 'ready');
     const desktop = await page.locator('.lab-stage').getAttribute('data-camera-position');
@@ -32,10 +32,28 @@ export async function experienceRegression({ browser, origin }) {
     }
     await page.locator('[data-lab-volume-preset="3"]').click();
     assert.equal(await slider.inputValue(),'50');
+    assert.ok(await slider.evaluate(element => element.getBoundingClientRect().height) >= 44,
+      'The volume control provides a full touch target');
+    assert.equal(await slider.evaluate(element => element.style.getPropertyValue('--range-progress')),'50%',
+      'The visible range fill follows the selected volume');
+    await slider.focus();
+    await page.keyboard.press('Home');
+    assert.equal(await slider.inputValue(),'0');
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await slider.inputValue(),'1');
+    await page.keyboard.press('End');
+    assert.equal(await slider.inputValue(),'100');
+    await page.locator('[data-lab-volume-preset="3"]').click();
     assert.equal(await page.locator('.experience-settings').evaluate(dialog => dialog.scrollWidth <= dialog.clientWidth),true,'Settings fit a phone viewport');
     await page.locator('.experience-settings').evaluate(dialog => { dialog.scrollTop = 0; });
     await page.screenshot({path:'artifacts/work-settings-new.png'});
     const axe = await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();
     assert.deepEqual(axe.violations.filter(v => ['critical','serious'].includes(v.impact)),[],'New preference controls remain accessible');
+    await page.locator('[data-lab-setting="theme"]').selectOption('dark');
+    await page.waitForFunction(() => document.querySelector('.work-lab').dataset.theme === 'dark');
+    const darkAxe = await new AxeBuilder({page}).include('.experience-settings').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();
+    assert.deepEqual(darkAxe.violations.filter(v => ['critical','serious'].includes(v.impact)),[],
+      'Dark preference labels and controls retain readable contrast');
+    await page.screenshot({path:'artifacts/work-settings-dark.png'});
   } finally { await context.close(); }
 }

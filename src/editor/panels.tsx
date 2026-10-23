@@ -1,6 +1,6 @@
 import { defaultDesign } from "../../supabase/functions/_shared/schema";
 import type { SitePage } from "../components/SiteRenderer";
-import { useId } from "react";
+import { useId, type CSSProperties } from "react";
 import type {
   Selection,
   SiteContent,
@@ -757,7 +757,7 @@ export function ThemePanel({
           ] as const
         ).map(([key, label]) => (
           <label key={key}>
-            {label}
+            <span className="author-color-label">{label}<output>{(c.design || defaultDesign)[key]}</output></span>
             <input
               type="color"
               aria-label={label}
@@ -774,14 +774,17 @@ export function ThemePanel({
           </label>
         ))}
       </div>
-      <label>
-        全站圓角
+      <label className="author-range-field">
+        <span className="author-range-label">全站圓角<output>{(c.design || defaultDesign).radius} px</output></span>
         <input
+          className="author-range-control"
           type="range"
           aria-label="全站圓角"
           min="0"
           max="32"
           value={(c.design || defaultDesign).radius}
+          aria-valuetext={`${(c.design || defaultDesign).radius} 像素`}
+          style={{ "--range-progress": `${(c.design || defaultDesign).radius / 32 * 100}%` } as CSSProperties}
           onChange={(e) =>
             update((next) => {
               next.design = {

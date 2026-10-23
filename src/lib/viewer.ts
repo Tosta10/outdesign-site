@@ -2,10 +2,12 @@ import { applySiteTheme, savedSiteTheme, setSiteTheme, type SiteTheme } from "./
 import { initEffects } from "./effects";
 import { initPageLoading } from "./page-loading";
 import { initSiteMotion } from "./site-motion";
+import { initEditorialMotion } from "./editorial-motion";
 export function initViewer(root: Document | HTMLElement): () => void {
   if (root.querySelector('.site[data-editing="true"]')) return () => {};
   const disposeMotion = initSiteMotion(root);
   const disposeEffects = initEffects(root);
+  const disposeEditorial = initEditorialMotion(root);
   const abort = new AbortController();
   const workLabs: (() => void)[] = [];
   const workReady = [...root.querySelectorAll<HTMLElement>("[data-work-lab]")].map(async (element) => {
@@ -154,6 +156,7 @@ export function initViewer(root: Document | HTMLElement): () => void {
     });
   }
   return () => {
+    disposeEditorial();
     disposeEffects();
     disposeMotion();
     disposeLoading();

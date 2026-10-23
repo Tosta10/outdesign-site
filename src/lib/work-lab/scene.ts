@@ -5,6 +5,7 @@ import { disposeOrbitControls } from './orbit-lifetime';
 import { usesSoftwareRenderer } from './renderer-probe';
 import { ViewerCameraMotion } from "./viewer-camera";
 import { FrameFieldCache } from "./field-cache";
+import { archivePresence, advanceModelReveal } from "./scene-transition";
 import { renderSuspended } from "../render-visibility";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
@@ -276,6 +277,10 @@ export function createLabScene(
     );
   };
   const artwork = new T.InstancedMesh(artGeometry, artMaterial, count);
+  const archiveMaterials = [shell, topMaterial, pins.material, artMaterial];
+  // Hashed coverage keeps the archive's depth ordering while fading. The
+  // archive used to disappear at detail=.995 and pop back in on the return.
+  archiveMaterials.forEach(material => { material.alphaHash = true; });
   for (const mesh of [body, edges, pins, artwork]) {
     mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);
     mesh.frustumCulled = false;
@@ -698,21 +703,15 @@ export function createLabScene(
     }
     const hoverLift = (l: number, r: number) =>
       hoverLifts.get(`${l}:${r}`) || 0;
-    reveal =
-      state.mode === "browse"
-        ? 0
-        : detail > 0.78 && lift.value > 3.3
-          ? Math.min(1, reveal + dt / (motion ? p.revealDuration : 0.01))
-          : reveal;
+    reveal = advanceModelReveal(reveal, state.mode, detail, lift.value, dt, motion ? p.revealDuration : .01);
     model.reveal.value =
       !motionAllowed(state.preferences, "modelDecryption") && !state.frosted
         ? 1
         : state.frosted
           ? 0
-          : state.mode === "browse"
-            ? 0.3
-            : reveal;
-    progress(reveal);
+          : reveal;
+    // UI returns immediately; the returning model retains its resolved image.
+    progress(state.mode === "browse" ? 0 : reveal);
     const narrow = host.clientWidth < 700,
       blend = detail;
     model.object.position.set(
@@ -755,7 +754,6 @@ export function createLabScene(
       );
       old.model.object.rotation.set(old.rotation.x, old.rotation.y, 0);
       old.model.object.scale.set(1.5, 1, 1);
-      old.model.reveal.value = Math.max(0, old.model.reveal.value - dt * 3);
       if (
         old.lift.value < 0.0001 &&
         Math.hypot(old.rotation.x, old.rotation.y) < 0.005
@@ -789,7 +787,11 @@ export function createLabScene(
       part.scale.setScalar(state.highlight === i ? 1.045 : 1);
     });
     model.accent.emissiveIntensity = state.highlight === 2 ? 0.7 : 0.08;
-    const arrayVisible = detail < 0.995 && state.mode !== "inspect";
+    const arrayOpacity = archivePresence(detail);
+    archiveMaterials.forEach(material => { material.opacity = arrayOpacity; });
+    const arrayVisible = arrayOpacity > .00001 && state.mode !== "inspect";
+    host.dataset.archivePresence = arrayOpacity.toFixed(5);
+    host.dataset.modelReveal = model.reveal.value.toFixed(5);
     [body, edges, pins, artwork].forEach(
       (mesh) => (mesh.visible = arrayVisible),
     );
@@ -948,7 +950,7 @@ export function createLabScene(
       Math.abs(turnY - (state.mode === "browse" ? 0 : state.rotation.y)) <
         0.0001 &&
       Math.abs(zoom - state.zoom) < 0.0001 &&
-      reveal === (state.mode === "browse" ? 0 : 1)
+      (state.mode === "browse" || reveal === 1)
     )
       stopRendering();
   }

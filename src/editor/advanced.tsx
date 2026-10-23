@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   contentSchema,
   defaultInteractions,
@@ -27,7 +27,7 @@ export function InteractionsPanel({
   return (
     <div className="advanced-panel">
       <p className="panel-help">
-        選擇一種卡片回饋即可。編輯畫布暫停傾斜，避免干擾拖曳；按頂部「預覽」可直接體驗。
+        這些預設用於自訂光學卡片。首頁的編輯式進場與捲動效果由全站展示設定控制；編輯畫布暫停卡片懸停效果，按頂部「預覽」可體驗。
       </p>
       <label>
         卡片互動
@@ -46,27 +46,32 @@ export function InteractionsPanel({
       </label>
       {effects.card === "tilt" && (
         <>
-          <label>
-            傾斜角度：{effects.tilt}°
+          <label className="author-range-field">
+            <span className="author-range-label">傾斜角度<output>{effects.tilt}°</output></span>
             <input
+              className="author-range-control"
               aria-label="傾斜角度"
               type="range"
               min="1"
               max="6"
               step="0.5"
               value={effects.tilt}
+              aria-valuetext={`${effects.tilt} 度`}
+              style={{ "--range-progress": `${(effects.tilt - 1) / 5 * 100}%` } as CSSProperties}
               onChange={(e) => set({ tilt: Number(e.target.value) })}
             />
           </label>
-          <label>
-            跟隨速度：{effects.damping.toFixed(2)}
+          <label className="author-range-field">
+            <span className="author-range-label">跟隨速度<output>{effects.damping.toFixed(2)}</output></span>
             <input
+              className="author-range-control"
               aria-label="跟隨速度"
               type="range"
               min="0.06"
               max="0.3"
               step="0.01"
               value={effects.damping}
+              style={{ "--range-progress": `${(effects.damping - .06) / .24 * 100}%` } as CSSProperties}
               onChange={(e) => set({ damping: Number(e.target.value) })}
             />
           </label>
@@ -95,7 +100,7 @@ export function InteractionsPanel({
         按壓回饋
       </label>
       <p className="panel-help">
-        觸控裝置停用懸停效果；系統「減少動態效果」優先於以上設定。效果只在互動時更新。
+        卡片懸停僅在滑鼠上運作。全站展示設定的動態偏好會決定是否播放；跟隨系統時會遵循裝置的減少動態設定。
       </p>
       <button
         className="panel-secondary"

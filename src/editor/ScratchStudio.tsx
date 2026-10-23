@@ -41,6 +41,7 @@ import { PanelResizer } from "./ResizablePanels";
 import { LogicObjectProperties } from "./LogicObjectProperties";
 import { MiniPreview } from "./MiniPreview";
 import { useCanvasNavigation, isTextEntry, zoomLevels } from "./useCanvasNavigation";
+import { matchesLibrary } from "./library-search";
 const mime = "application/outdesign-logic";
 type Payload = {
   op?: LogicOp;
@@ -150,6 +151,7 @@ export default function ScratchStudio(props: Props) {
     (s) => s.page === page,
   );
   const [category, setCategory] = useState("objects"),
+    [librarySearch, setLibrarySearch] = useState(""),
     [layers, setLayers] = useState<LayerItem[]>([]),
     [target, setTarget] = useState("hero");
   const [editing, setEditing] = useState<{
@@ -177,6 +179,7 @@ export default function ScratchStudio(props: Props) {
     dy: number;
   } | null>(null);
   useEffect(() => () => { touchDrag.current?.ghost.remove(); }, []);
+  useEffect(() => { setSelected(null); setEditing(null); setMessage(""); }, [page]);
   useEffect(() => {
     if (inventory.current) setLayers(collectLayers(content, inventory.current));
   }, [content, page]);
@@ -192,10 +195,11 @@ export default function ScratchStudio(props: Props) {
     const result = contentSchema.safeParse(candidate);
     if (!result.success) {
       setMessage(result.error.issues[0]?.message || "積木超過結構上限");
-      return;
+      return false;
     }
     update(fn);
     setMessage("已同步草稿");
+    return true;
   };
   const modifyScript = (id: string, fn: (s: LogicScript) => void) =>
     candidateChange((next) => {
@@ -208,25 +212,23 @@ export default function ScratchStudio(props: Props) {
     targetValue = target,
     nodeType?: "frame" | "text" | "image" | "link",
     image = "",
+    event: LogicScript["event"] = "click",
   ) => {
-    let createdTarget = targetValue;
-    candidateChange((next) => {
+    const node = nodeType ? createCanvasNode(page, nodeType) : undefined;
+    if (node) node.image = image;
+    const id = crypto.randomUUID();
+    const accepted = candidateChange((next) => {
       next.workspace ||= { nodes: [] };
       next.workspace.scripts ||= [];
-      if (nodeType) {
-        const node = createCanvasNode(page, nodeType);
-        node.image = image;
-        next.workspace.nodes.push(node);
-        createdTarget = `node:${node.id}`;
-      }
+      if (node) next.workspace.nodes.push(structuredClone(node));
       next.workspace.scripts.push({
-        id: crypto.randomUUID(),
+        id,
         page,
         name: nodeType
           ? `新${{ frame: "面板", text: "文字", image: "圖片", link: "連結" }[nodeType]}`
           : "互動腳本",
-        target: createdTarget,
-        event: "click",
+        target: node ? `node:${node.id}` : targetValue,
+        event,
         key: "Enter",
         enabled: true,
         x: Math.max(0, Math.min(4000, x)),
@@ -234,6 +236,31 @@ export default function ScratchStudio(props: Props) {
         blocks: [],
       });
     });
+    if (accepted) setSelected({ script: id });
+  };
+  const quickAdd = (payload: Payload) => {
+    if (payload.object) {
+      addScript(40 + scripts.length % 3 * 350, 50 + Math.floor(scripts.length / 3) * 140, target, payload.object === "existing" ? undefined : payload.object as "frame");
+      return;
+    }
+    if (payload.preset) {
+      const preset = content.workspace?.presets?.find((item) => item.id === payload.preset);
+      if (!preset) return;
+      const nodes = instantiateAssembly(preset, page, null);
+      const id = crypto.randomUUID();
+      const accepted = candidateChange((next) => {
+        next.workspace ||= { nodes: [] };
+        next.workspace.scripts ||= [];
+        next.workspace.nodes.push(...structuredClone(nodes));
+        next.workspace.scripts.push({ id, page, name: preset.name, target: `node:${nodes[0].id}`, event: "click", key: "Enter", enabled: true, x: 40 + scripts.length % 3 * 350, y: 50 + Math.floor(scripts.length / 3) * 140, blocks: [] });
+      });
+      if (accepted) setSelected({ script: id });
+      return;
+    }
+    if (payload.event && !selected) { addScript(40, 50, target, undefined, "", payload.event); return; }
+    if (!selected || !scripts.some((script) => script.id === selected.script)) { setMessage("先建立或選取左側物件腳本，再點選動作加入尾端。"); return; }
+    if (payload.event) modifyScript(selected.script, (script) => { script.event = payload.event!; });
+    if (payload.op) modifyScript(selected.script, (script) => { script.blocks.push(createLogicBlock(payload.op!)); });
   };
   const startPayload = (e: React.DragEvent, payload: Payload) => {
     e.dataTransfer.setData(mime, JSON.stringify(payload));
@@ -448,6 +475,16 @@ export default function ScratchStudio(props: Props) {
     return () => window.removeEventListener("keydown", keys);
   }, [content, selected, editing, preview]);
   const selectedCategory = logicCategories.find((c) => c.id === category)!;
+  const searching = Boolean(librarySearch.trim());
+  const objectCatalog = ([
+    ["existing", "物件圖層 · 指定既有內容"], ["frame", "建立面板圖層"], ["text", "建立文字圖層"], ["link", "建立連結圖層"],
+  ] as const).filter(([, label]) => (!searching && category === "objects") || searching && matchesLibrary(librarySearch, label, "物件圖層"));
+  const libraryPresets = (content.workspace?.presets || []).filter((preset) => (!searching && category === "objects") || searching && matchesLibrary(librarySearch, preset.name, "組裝 物件圖層"));
+  const libraryEvents = Object.entries(eventLabels).filter(([, label]) => (!searching && category === "events") || searching && matchesLibrary(librarySearch, label, "事件"));
+  const libraryActions = logicCatalog.filter((block) => (!searching && block.category === category) || searching && matchesLibrary(librarySearch, block.label, block.hint, logicCategories.find((item) => item.id === block.category)?.name || "", block.op));
+  const showImports = !searching && category === "imports" || searching && matchesLibrary(librarySearch, "圖像匯入 圖片網址 上傳 image");
+  const resultCount = objectCatalog.length + libraryPresets.length + libraryEvents.length + libraryActions.length + Number(showImports);
+  const selectedScript = scripts.find((script) => script.id === selected?.script);
   return (
     <div className="scratch-studio"
       onPointerDownCapture={(e) => {
@@ -480,7 +517,7 @@ export default function ScratchStudio(props: Props) {
         e.preventDefault(); e.stopPropagation();
         touchDrag.current = null; d.ghost.remove();
         document.querySelectorAll(".logic-drop-slot.active").forEach((el) => el.classList.remove("active"));
-        if (!d.moved) { setMessage("拖曳積木至工作區連接位置。"); return; }
+        if (!d.moved) { quickAdd(d.payload); return; }
         const hit = document.elementFromPoint(e.clientX, e.clientY);
         const stack = hit?.closest<HTMLElement>(".scratch-stack");
         const slot = stack && magneticSlot({ currentTarget: stack, clientX: e.clientX, clientY: e.clientY });
@@ -742,16 +779,33 @@ export default function ScratchStudio(props: Props) {
         <MiniPreview content={deferredContent} page={page} api={props.api} base={props.base} assets={props.assets} suspended={Boolean(preview || editing)} onRun={() => setPreview(true)} />
         {page === "work" && <WorkLabPanel content={content} update={update} compact />}
         <div className="scratch-library-title">
-          <p className="eyebrow">BLOCK LIBRARY</p>
-          <h2>把邏輯組起來</h2>
+          <p className="eyebrow">INTERACTION SYSTEM</p>
+          <h2>讓物件開始回應</h2>
+          <p className="author-workflow">01 物件 <span>→</span> 02 事件 <span>→</span> 03 動作</p>
+          <input type="search" className="logic-library-search" aria-label="搜尋全部積木" placeholder="搜尋動作、事件或組裝…" value={librarySearch} onChange={(e) => setLibrarySearch(e.target.value)} />
+          {searching && <button className="library-clear-search" onClick={() => setLibrarySearch("")}>清除搜尋，返回{selectedCategory.name}</button>}
+        </div>
+        <div className="logic-insertion-context" aria-live="polite">
+          <span>{selectedScript ? "動作將加入此腳本尾端" : "先加入物件，或選取現有腳本"}</span>
+          {selectedScript && <><strong>{selectedScript.name}</strong><button onClick={() => setEditing({ script: selectedScript.id })}>編輯物件與事件 ↗</button></>}
         </div>
         <div className="logic-categories" role="tablist" aria-label="積木分類">
           {logicCategories.map((c) => (
             <button
               key={c.id}
               role="tab"
+              tabIndex={category === c.id ? 0 : -1}
               aria-selected={category === c.id}
-              onClick={() => setCategory(c.id)}
+              aria-controls="logic-library-results"
+              id={`logic-category-${c.id}`}
+              onClick={() => { setCategory(c.id); setLibrarySearch(""); }}
+              onKeyDown={(e) => {
+                const index = logicCategories.findIndex((item) => item.id === c.id);
+                const next = e.key === "Home" ? 0 : e.key === "End" ? logicCategories.length - 1 : ["ArrowRight", "ArrowDown"].includes(e.key) ? (index + 1) % logicCategories.length : ["ArrowLeft", "ArrowUp"].includes(e.key) ? (index + logicCategories.length - 1) % logicCategories.length : -1;
+                if (next < 0) return;
+                e.preventDefault(); setCategory(logicCategories[next].id); setLibrarySearch("");
+                e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("[role=tab]")[next]?.focus();
+              }}
               style={{ "--block-color": c.color } as CSSProperties}
             >
               <i />
@@ -759,11 +813,13 @@ export default function ScratchStudio(props: Props) {
             </button>
           ))}
         </div>
-        <div className="logic-library-content">
+        <div className="logic-library-content" id="logic-library-results" role="tabpanel" aria-labelledby={searching ? undefined : `logic-category-${category}`} aria-label={searching ? "積木搜尋結果" : undefined}>
           <h3 style={{ color: selectedCategory.color }}>
-            {selectedCategory.name}
+            {searching ? "全部搜尋結果" : selectedCategory.name}
           </h3>
-          {category === "objects" && (
+          <p className="library-result-count" aria-live="polite">{resultCount} 個可用項目 · 點選加入，拖曳指定位置</p>
+          {resultCount === 0 && <p className="author-empty">找不到符合的積木。<br />試試「移動」、「點擊」或「文字」。</p>}
+          {(objectCatalog.length > 0 || libraryPresets.length > 0) && (
             <>
               <label>
                 指定網站物件
@@ -781,14 +837,7 @@ export default function ScratchStudio(props: Props) {
                     ))}
                 </select>
               </label>
-              {(
-                [
-                  ["existing", "物件圖層 · 指定既有內容"],
-                  ["frame", "建立面板圖層"],
-                  ["text", "建立文字圖層"],
-                  ["link", "建立連結圖層"],
-                ] as const
-              ).map(([object, label]) => (
+              {objectCatalog.map(([object, label]) => (
                 <button
                   key={object}
                   className="library-scratch-block"
@@ -798,19 +847,19 @@ export default function ScratchStudio(props: Props) {
                   draggable
                   data-logic-payload={JSON.stringify({ object })}
                   onDragStart={(e) => startPayload(e, { object })}
-                  onClick={() => setMessage("拖曳此物件至工作區；鍵盤可使用上方「＋ 物件腳本」。")}
+                  onClick={() => quickAdd({ object })}
                 >
                   {label}
                 </button>
               ))}
-              {content.workspace?.presets?.map((p) => (
+              {libraryPresets.map((p) => (
                 <div className="saved-assembly-row" key={p.id}>
                   <button
                     className="library-scratch-block"
                     draggable
                     data-logic-payload={JSON.stringify({ preset: p.id })}
                     onDragStart={(e) => startPayload(e, { preset: p.id })}
-                    onClick={() => setMessage("拖曳組裝至工作區。")}
+                    onClick={() => quickAdd({ preset: p.id })}
                   >
                     組裝 · {p.name}
                   </button>
@@ -829,7 +878,7 @@ export default function ScratchStudio(props: Props) {
               ))}
             </>
           )}
-          {category === "imports" && (
+          {showImports && (
             <>
               <p>匯入的圖片會建立可編輯圖層和獨立腳本。</p>
               <label className="logic-upload">
@@ -858,14 +907,13 @@ export default function ScratchStudio(props: Props) {
                 draggable
                 data-logic-payload={JSON.stringify({ object: "image" })}
                 onDragStart={(e) => startPayload(e, { object: "image" })}
-                onClick={() => setMessage("拖曳圖片積木至工作區。")}
+                onClick={() => quickAdd({ object: "image" })}
               >
                 圖像匯入 · 圖片網址
               </button>
             </>
           )}
-          {category === "events" &&
-            Object.entries(eventLabels).map(([event, label]) => (
+          {libraryEvents.map(([event, label]) => (
               <button
                 key={event}
                 className="library-scratch-block"
@@ -877,36 +925,30 @@ export default function ScratchStudio(props: Props) {
                 onDragStart={(e) =>
                   startPayload(e, { event: event as LogicScript["event"] })
                 }
+                onClick={() => quickAdd({ event: event as LogicScript["event"] })}
               >
                 當 {label} 時
               </button>
             ))}
-          {logicCatalog
-            .filter((b) => b.category === category)
-            .map((b) => (
+          {libraryActions.map((b) => (
               <button
                 key={b.op}
                 className="library-scratch-block"
                 title={b.hint}
                 style={
-                  { "--block-color": selectedCategory.color } as CSSProperties
+                  { "--block-color": logicCategories.find((item) => item.id === b.category)?.color } as CSSProperties
                 }
                 draggable
                 data-logic-payload={JSON.stringify({ op: b.op })}
                 onDragStart={(e) => startPayload(e, { op: b.op })}
-                onClick={() => setMessage("拖曳此積木至腳本連接處。鍵盤可選取腳本後，聚焦積木並按 Enter 插入。")}
-                onKeyDown={(e) => {
-                  if (e.key !== "Enter" || !selected) return;
-                  e.preventDefault();
-                  modifyScript(selected.script, (script) => script.blocks.push(createLogicBlock(b.op)));
-                }}
+                onClick={() => quickAdd({ op: b.op })}
               >
                 {b.label}
                 <small>{b.hint}</small>
               </button>
             ))}
           <p className="logic-library-help">
-            拖入左側連接槽。條件積木有「符合」與「否則」兩個分支，重複最多 10
+            點選動作加入目前腳本尾端，或拖入指定連接槽。條件積木有「符合」與「否則」兩個分支，重複最多 10
             次；執行預覽可直接測試互動。
           </p>
         </div>

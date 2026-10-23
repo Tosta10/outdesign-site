@@ -478,8 +478,8 @@ export function WorkLab({
           <input data-lab-setting="ambient" type="checkbox" />
           合成環境音
         </label>
-        <label>
-          音場強度 <output data-lab-volume-value>10×</output>
+        <label className="volume-control">
+          <span className="volume-heading">音場強度 <output data-lab-volume-value>10×</output></span>
           <input
             data-lab-setting="volume"
             aria-label="音場強度"
@@ -487,7 +487,9 @@ export function WorkLab({
             min="0"
             max="100"
             step="1"
+            defaultValue="50"
           />
+          <span className="volume-scale" aria-hidden="true"><span>輕柔</span><span>飽滿</span></span>
         </label>
         <div className="volume-presets" role="group" aria-label="音場強度預設">
           <button data-lab-volume-preset="1.5" aria-pressed="false">5× <span>輕柔</span></button>

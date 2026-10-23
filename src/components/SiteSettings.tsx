@@ -7,7 +7,7 @@ export function SiteSettings({ dialogOnly = false, triggerOnly = false } = {}) {
       <p className="settings-intro">調整光線與節奏，讓這個空間更貼近你。</p>
       <label>全站配色<select data-site-theme-select aria-label="全站配色"><option value="light">淺色</option><option value="dark">深色</option></select></label>
       <label>全站動態<select data-site-motion-select aria-label="全站動態"><option value="system">依系統設定</option><option value="full">完整動態</option><option value="reduced">減少動態</option></select></label>
-      <p>配色與動態偏好會同步到所有分頁。選擇完整動態可啟用卡片傾斜與作品動畫。</p>
+      <p>配色與動態偏好會同步到所有分頁。完整動態包含頁面揭幕、影像取景與作品動畫；減少動態仍保留全部內容與操作。</p>
     </dialog>}
   </>;
 }

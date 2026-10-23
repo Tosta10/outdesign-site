@@ -2,48 +2,72 @@ import assert from "node:assert/strict";
 import AxeBuilder from "@axe-core/playwright";
 import { writeFile } from "node:fs/promises";
 export async function siteThemeRegression({ page, origin }) {
-  await page.goto(`${origin}/about/`, { waitUntil: "networkidle" });
-  assert.equal(await page.locator(".site").getAttribute("data-site-theme"), "dark");
-  await page.getByRole("button", { name: "開啟選單", exact: true }).click();
-  const gear = page.locator('.nav-drawer [data-site-settings]');
-  assert.equal(await gear.locator("svg circle").count(), 1, "A conventional settings gear is inside the navigation menu");
-  await gear.click();
-  await page.getByLabel("全站配色", { exact: true }).selectOption("light");
-  await page.getByRole("button", { name: "關閉全站設定", exact: true }).click();
-  for (const path of ["/about/", "/journal/", "/resources/", "/", "/work/"]) {
-    await page.goto(`${origin}${path}`, { waitUntil: "networkidle" });
-    assert.equal(await page.locator(".site").getAttribute("data-site-theme"), "light", `Global palette persists at ${path}`);
-    if (path === "/work/") {
-      await page.waitForFunction(() => document.querySelector("[data-work-lab]")?.dataset.theme === "light");
-    } else {
-      assert.equal(await page.locator('.nav-drawer [data-site-settings]').count(), 1);
-      assert.equal(await page.locator('.header-actions [data-site-settings]').count(), 0);
+  const paths = ["/about/", "/journal/", "/resources/", "/", "/work/"];
+  const results = [];
+  const errors = [];
+  const onError = error => errors.push(error.message);
+  page.on("pageerror", onError);
+  const check = async (target, theme, path, mobile = false) => {
+    await target.waitForFunction(() => document.body.dataset.pageState === "ready");
+    assert.equal(await target.locator(".site").getAttribute("data-site-theme"), theme,
+      `${theme} palette persists at ${path}`);
+    if (path === "/work/")
+      await target.waitForFunction(theme => document.querySelector("[data-work-lab]")?.dataset.theme === theme, theme);
+    else {
+      assert.equal(await target.locator('.nav-drawer [data-site-settings]').count(), 1);
+      assert.equal(await target.locator('.folio-header [data-site-settings]').count(), 0);
     }
-    {
-      const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
-      const name = path.replaceAll("/", "") || "home";
-      await writeFile(`artifacts/accessibility-site-light-${name}.json`, JSON.stringify(axe.violations, null, 2));
-      assert.deepEqual(axe.violations.filter(v => ["serious", "critical"].includes(v.impact)), [], `Global light palette stays readable at ${path}`);
-      await page.screenshot({ path: `artifacts/site-light-${name}.png` });
-    }
-  }
-  const mobileContext = await page.context().browser().newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: "reduce" });
+    assert.equal(await target.evaluate(() => document.documentElement.scrollWidth > innerWidth), false,
+      `${theme} ${path} fits the ${mobile ? "phone" : "desktop"} viewport`);
+    const axe = await new AxeBuilder({ page: target }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+    const name = path.replaceAll("/", "") || "home";
+    const prefix = `site-${theme}-${mobile ? "mobile-" : ""}${name}`;
+    await writeFile(`artifacts/accessibility-${prefix}.json`, JSON.stringify(axe.violations, null, 2));
+    assert.deepEqual(axe.violations.filter(issue => ["serious", "critical"].includes(issue.impact)), [],
+      `${theme} ${path} retains readable ${mobile ? "phone" : "desktop"} content`);
+    await target.screenshot({ path: `artifacts/${prefix}.png`, fullPage: path !== "/work/" });
+    results.push({ theme, page: name, mobile, seriousOrCritical: 0 });
+  };
   try {
-    const mobile = await mobileContext.newPage();
-    await mobile.addInitScript(() => localStorage.setItem("outdesign.site.theme.v1", "light"));
-    await mobile.goto(`${origin}/`, { waitUntil: "networkidle" });
-    await mobile.waitForFunction(() => document.body.dataset.pageState === "ready");
-    const surface = await mobile.locator(".mission-card").evaluate(element => {
-      const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d");
-      ctx.fillStyle = getComputedStyle(element).backgroundColor;
-      ctx.fillRect(0, 0, 1, 1);
-      return [...ctx.getImageData(0, 0, 1, 1).data];
-    });
-    assert.ok(surface.slice(0, 3).every(value => value > 180), "Touch-device glass surfaces follow the light palette instead of a forced dark fallback");
-    assert.ok((await mobile.locator('.lunar-backdrop').getAttribute('src')).includes('lunar-dawn-light.webp'), 'Light mode uses its dedicated moon artwork');
-    assert.ok(Number(await mobile.locator(".lunar-backdrop").evaluate(element => getComputedStyle(element).opacity)) > .8, "The purpose-made light artwork retains its detail");
-    const axe = await new AxeBuilder({ page: mobile }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
-    assert.deepEqual(axe.violations.filter(v => ["serious", "critical"].includes(v.impact)), [], "The light touch layout remains readable");
-    await mobile.screenshot({ path: "artifacts/site-light-mobile-home.png", fullPage: true });
-  } finally { await mobileContext.close(); }
+    for (const theme of ["dark", "light"]) {
+      await page.goto(`${origin}/about/`, { waitUntil: "networkidle" });
+      await page.getByRole("button", { name: "開啟選單", exact: true }).click();
+      const gear = page.locator('.nav-drawer [data-site-settings]');
+      assert.equal(await gear.locator("svg circle").count(), 1,
+        "A conventional settings gear is inside the single navigation menu");
+      await gear.click();
+      await page.getByLabel("全站配色", { exact: true }).selectOption(theme);
+      await page.getByRole("button", { name: "關閉全站設定", exact: true }).click();
+      for (const path of paths) {
+        await page.goto(`${origin}${path}`, { waitUntil: "networkidle" });
+        await check(page, theme, path);
+      }
+      const mobileContext = await page.context().browser().newContext({
+        viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: "reduce",
+      });
+      try {
+        const mobile = await mobileContext.newPage();
+        mobile.on("pageerror", onError);
+        await mobile.addInitScript(theme => localStorage.setItem("outdesign.site.theme.v1", theme), theme);
+        for (const path of paths) {
+          await mobile.goto(`${origin}${path}`, { waitUntil: "networkidle" });
+          await check(mobile, theme, path, true);
+          if (path === "/") {
+            const surface = await mobile.locator(".editorial-site").evaluate(element => {
+              const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d");
+              ctx.fillStyle = getComputedStyle(element).backgroundColor;
+              ctx.fillRect(0, 0, 1, 1);
+              return [...ctx.getImageData(0, 0, 1, 1).data];
+            });
+            assert.ok(surface.slice(0, 3).every(value => theme === "light" ? value > 180 : value < 80),
+              "The touch layout keeps the selected paper or graphite palette");
+            assert.equal(await mobile.locator('main a[data-page-target="work"]').count(), 1,
+              "Touch devices keep one clear work entrance");
+          }
+        }
+      } finally { await mobileContext.close(); }
+    }
+    assert.deepEqual(errors, []);
+    await writeFile("artifacts/site-theme-results.json", JSON.stringify({ checks: results, runtimeErrors: errors }, null, 2));
+  } finally { page.off("pageerror", onError); }
 }

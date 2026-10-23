@@ -49,7 +49,7 @@ export async function studioRegression({
     await visitor.setViewportSize({ width, height: 1080 });
     await label("畫布裝置").selectOption(String(width));
     await settleCanvas();
-    for (const selector of [".hero", ".mission-card", ".mission-card h2", ".hero h1", ".site-header"])
+    for (const selector of [".folio-hero", ".folio-work-link", ".folio-work-link h2", ".folio-hero h1", ".folio-header"])
       assert.deepEqual(await page.locator(".editor-canvas " + selector).evaluate(layout), await visitor.locator(selector).evaluate(layout), `Public/editor parity at ${width}: ${selector}`);
   }
   await visitor.close();
@@ -70,7 +70,7 @@ export async function studioRegression({
     await hoverTarget.evaluate((el) => getComputedStyle(el).outlineColor),
     "rgb(77, 163, 255)",
   );
-  await selectLayer("介紹卡片");
+  await selectLayer("作品入口");
   await page
     .locator(".editor-canvas .mission-card")
     .hover({ position: { x: 5, y: 5 } });
@@ -82,6 +82,7 @@ export async function studioRegression({
   );
   // Direct pointer drag of a built-in card makes one undo step.
   const card = page.locator(".editor-canvas .mission-card");
+  const originalPosition = await card.evaluate((el) => getComputedStyle(el).position);
   await card.scrollIntoViewIfNeeded();
   const cardBefore = await card.boundingBox();
   await gesture(card, 40, 24);
@@ -90,7 +91,7 @@ export async function studioRegression({
   assert.ok(Math.abs(cardAfter.y - cardBefore.y - 24) <= 2, "No vertical layout jump after release");
   await tab("佈局").click();
   assert.ok(Number(await label("水平位移").inputValue()) >= 32);
-  assert.equal(await page.locator(".editor-canvas .mission-card").evaluate((el) => getComputedStyle(el).position), "absolute", "Dragging preserves the card's original positioning");
+  assert.equal(await card.evaluate((el) => getComputedStyle(el).position), originalPosition, "Dragging preserves the editorial link's flow positioning");
   await undo();
   await page.locator(".editor-toolstrip").click({ position: { x: 2, y: 2 } });
   await page.keyboard.down("Alt");
@@ -102,8 +103,9 @@ export async function studioRegression({
   assert.equal(await label("畫布縮放").inputValue(), "1");
   await label("畫布裝置").selectOption("390");
   await settleCanvas();
-  assert.equal(await card.evaluate((el) => getComputedStyle(el).position), "relative");
-  assert.equal(await page.locator(".editor-canvas .hero").evaluate((el) => getComputedStyle(el).flexDirection), "column");
+  assert.ok(["relative", "static"].includes(await card.evaluate((el) => getComputedStyle(el).position)),
+    "The work entrance stays in the phone's reading flow");
+  assert.equal(await page.locator(".editor-canvas .folio-hero-stage").evaluate((el) => getComputedStyle(el).flexDirection), "column");
   await label("畫布裝置").selectOption("auto");
   await settleCanvas();
   await button("刪除選取圖層").click();
@@ -118,15 +120,15 @@ export async function studioRegression({
     await page.locator(".editor-canvas .mission-card:visible").count(),
     1,
   );
-  await selectLayer("介紹卡片");
+  await selectLayer("作品入口");
   await gesture(button("拖曳縮放選取物件"), 24, 16);
   await tab("佈局").click();
   assert.ok(Number(await label("物件寬度").inputValue()) > 100);
   await undo();
-  await button("鎖定圖層：介紹卡片").click();
+  await button("鎖定圖層：作品入口").click();
   await settleCanvas();
   assert.equal(await button("刪除選取圖層").isDisabled(), true);
-  await button("解鎖圖層：介紹卡片").click();
+  await button("解鎖圖層：作品入口").click();
   await settleCanvas();
   const leftWidth = await page
     .locator(".editor-layers")
@@ -225,6 +227,10 @@ export async function studioRegression({
   await button("展開工作區").click();
   const candidate = JSON.parse(baseline);
   candidate.about.title = "即時預覽尚未套用";
+  const customArtwork = "https://assets.example.test/custom-hero.svg";
+  await page.route(customArtwork, route => route.fulfill({ contentType: "image/svg+xml",
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320"><rect width="320" height="320" fill="#55695b"/></svg>' }));
+  candidate.hero.image = customArtwork;
   await code.fill(JSON.stringify(candidate));
   const frame = page.frameLocator('iframe[title="代碼即時預覽"]');
   await frame
@@ -235,10 +241,28 @@ export async function studioRegression({
     await page.locator(".editor-canvas .mission-card h2").textContent(),
     "即時預覽尚未套用",
   );
+  await frame.locator(`img[src="${customArtwork}"]`).waitFor();
+  assert.equal(await frame.locator(`img[src="${customArtwork}"]`).evaluate(async image => {
+    await image.decode(); return image.naturalWidth;
+  }), 320, "A real author-selected hero image survives the typographic default redesign");
+  // Empty states can be checked in the isolated code preview without applying
+  // the candidate to the draft or modifying published data.
+  const emptyCandidate = structuredClone(candidate);
+  emptyCandidate.notes = [];
+  emptyCandidate.attachments = [];
+  await code.fill(JSON.stringify(emptyCandidate));
+  await label("代碼預覽頁面").selectOption("journal");
+  await frame.getByRole("heading", { name: "第一篇思考，正在路上。", exact: true }).waitFor();
+  assert.equal(await frame.locator(".note-item").count(), 0);
+  await label("代碼預覽頁面").selectOption("resources");
+  await frame.getByRole("heading", { name: "好用的事物，慢慢整理。", exact: true }).waitFor();
+  assert.equal(await frame.locator(".folio-file").count(), 0, "An empty resource shelf offers no fake downloads");
+  await label("代碼預覽頁面").selectOption("home");
   await code.fill("{invalid");
   await page.getByText("保留上次有效畫面", { exact: true }).waitFor();
   await code.fill(baseline);
   await button("關閉代碼工作區").click();
+  await page.unroute(customArtwork);
   // Dense layout remains editable; typing coalesces independently from replacing the scene.
   const stress = JSON.parse(baseline);
   stress.workspace.nodes = [];
@@ -317,7 +341,10 @@ export async function studioRegression({
   );
   await label("腳本目標物件").selectOption("element:field-hero-line1");
   await button("物件圖層 · 指定既有內容").click();
-  assert.equal(await page.locator(".scratch-stack").count(), 0, "Clicking the library does not insert");
+  assert.equal(await page.locator(".scratch-stack").count(), 1, "Clicking the library creates one actual script");
+  await button("復原").click();
+  await settleCanvas();
+  assert.equal(await page.locator(".scratch-stack").count(), 0, "Click insertion participates in undo history");
   await button("物件圖層 · 指定既有內容").dragTo(page.locator(".scratch-plane"), { targetPosition: { x: 40, y: 50 } });
   const stack = page.locator(".scratch-stack").first();
   await stack.locator(".scratch-object").dblclick();
@@ -328,7 +355,8 @@ export async function studioRegression({
   };
   await page.frameLocator('iframe[title="積木即時預覽"]').locator(".mission-card").waitFor();
   await label("即時預覽裝置").selectOption("390");
-  assert.equal(await page.frameLocator('iframe[title="積木即時預覽"]').locator(".mission-card").evaluate((el) => getComputedStyle(el).position), "relative");
+  assert.ok(["relative", "static"].includes(await page.frameLocator('iframe[title="積木即時預覽"]').locator(".mission-card").evaluate((el) => getComputedStyle(el).position)),
+    "The isolated phone preview preserves the work entrance's flow layout");
   await label("即時預覽裝置").selectOption("1280");
   await label("即時預覽縮放").fill("1.5");
   assert.equal(await label("即時預覽縮放").inputValue(), "1.5");
@@ -509,6 +537,9 @@ export async function studioRegression({
   // Original DOM section order can be changed from the layer tree with the mouse.
   await label("預覽頁面").selectOption("about");
   await settleCanvas();
+  // Keep both draggable rows visible: the richer about section has many children.
+  const collapseAbout = button("收合圖層：關於區塊");
+  if (await collapseAbout.count()) await collapseAbout.click();
   await button("選取圖層：聯絡區塊")
     .locator("..")
     .dragTo(button("選取圖層：關於區塊").locator(".."), {

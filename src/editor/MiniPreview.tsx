@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { SiteRenderer, type SitePage } from "../components/SiteRenderer";
 import type { SiteContent } from "../../supabase/functions/_shared/schema";
@@ -14,9 +14,15 @@ export const MiniPreview = memo(function MiniPreview(props: {
   const [width, setWidth] = useState(1280);
   const [zoom, setZoom] = useState(1);
   const [available, setAvailable] = useState(300);
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(() => typeof window === "undefined" || window.innerWidth > 600);
   const viewport = useRef<HTMLDivElement>(null);
   useEffect(() => { notifyRenderVisibility(); }, [props.suspended]);
+  useEffect(() => {
+    const compact = matchMedia("(max-width: 600px)");
+    const collapse = () => { if (compact.matches) setOpen(false); };
+    compact.addEventListener("change", collapse);
+    return () => compact.removeEventListener("change", collapse);
+  }, []);
   useEffect(() => {
     if (!viewport.current) return;
     let frame = 0;
@@ -28,7 +34,7 @@ export const MiniPreview = memo(function MiniPreview(props: {
     return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, [open]);
   const scale = available / width * zoom;
-  return <section className="logic-mini-preview" aria-label="積木即時預覽區" data-render-suspended={props.suspended || undefined}>
+  return <section className="logic-mini-preview" aria-label="積木即時預覽區" data-preview-open={open} data-render-suspended={props.suspended || undefined}>
     <div className="mini-preview-heading">
       <button aria-expanded={open} onClick={() => setOpen(!open)}>即時預覽 {open ? "▾" : "▸"}</button>
       <button onClick={props.onRun} title="開啟互動執行預覽">▶ 執行</button>
@@ -38,7 +44,7 @@ export const MiniPreview = memo(function MiniPreview(props: {
         <select aria-label="即時預覽裝置" value={width} onChange={(e) => setWidth(Number(e.target.value))}>
           <option value={1280}>桌面</option><option value={768}>平板</option><option value={390}>手機</option>
         </select>
-        <input aria-label="即時預覽縮放" type="range" min="0.5" max="2" step="0.1" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} />
+        <input className="author-range-control" aria-label="即時預覽縮放" aria-valuetext={`${Math.round(zoom * 100)}%`} type="range" min="0.5" max="2" step="0.1" value={zoom} style={{ "--range-progress": `${(zoom - .5) / 1.5 * 100}%` } as CSSProperties} onChange={(e) => setZoom(Number(e.target.value))} />
         <output>{Math.round(zoom * 100)}%</output>
       </div>
       <div ref={viewport} className="mini-preview-viewport">

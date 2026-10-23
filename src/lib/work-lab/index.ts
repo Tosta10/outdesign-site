@@ -393,6 +393,7 @@ export async function initWorkLab(root: HTMLElement, { authoring = false } = {})
     const volumeLabel = `${Math.round(state.preferences.volume / .3 * 10) / 10}×`;
     q('[data-lab-volume-value]').textContent = volumeLabel;
     q('[data-lab-setting="volume"]').setAttribute('aria-valuetext', volumeLabel);
+    q('[data-lab-setting="volume"]').style.setProperty('--range-progress', `${volumeToPosition(state.preferences.volume)}%`);
     root.querySelectorAll<HTMLElement>('[data-lab-volume-preset]').forEach(button => button.setAttribute('aria-pressed', String(Math.abs(Number(button.dataset.labVolumePreset) - state.preferences.volume) < .01)));
     root
       .querySelectorAll<HTMLInputElement>("[data-lab-effect]")

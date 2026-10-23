@@ -2,6 +2,7 @@ import { siteThemeRegression } from "./site-theme-regression.mjs";
 import { homeEffectsRegression } from "./home-effects-regression.mjs";
 import { experienceRegression } from './experience-regression.mjs';
 import { pageLoadingRegression } from "./page-loading-regression.mjs";
+import { editorialRegression } from "./editorial-regression.mjs";
 import { workLabAuthorRegression } from "./work-lab-author-regression.mjs";
 import { workLabTrackingRegression } from "./work-lab-tracking-regression.mjs";
 import { chromium } from "@playwright/test";
@@ -127,19 +128,7 @@ try {
     false,
     "Editor must not load for visitors",
   );
-  await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.locator(".mission-card").scrollIntoViewIfNeeded();
-  const optical = await page.locator(".mission-card").boundingBox();
-  await page
-    .locator(".mission-card")
-    .hover({ position: { x: optical.width * 0.25, y: optical.height * 0.25 } });
-  await page.waitForFunction(() =>
-    document.querySelector(".mission-card").style.transform.includes("rotateX"),
-  );
-  await page.mouse.move(0, 0);
-  await page.waitForFunction(
-    () => document.querySelector(".mission-card").style.transform === "",
-  );
+  await page.waitForFunction(() => document.body.dataset.pageState === "ready");
   assert.equal(
     await page.locator("[data-studio-launch]").count(),
     1,
@@ -150,27 +139,23 @@ try {
     "/assets/outdesign-mark.webp",
   );
   assert.equal(
-    await page.locator(".hero-atmosphere,.bubble-panel,.ripple-canvas").count(),
+    await page.locator("[data-work-lab],.work-grid,.featured-card").count(),
     0,
-    "Original homepage panels stay intact without extra effects",
+    "The editorial homepage keeps the 3D archive and repeated work controls on the works page",
   );
   assert.equal(
     requests.some((url) => /src\/lib\/surfaces|node_modules.*three/.test(url)),
     false,
-    "Original homepage does not load optional WebGL",
+    "The editorial homepage does not load the 3D engine",
   );
   assert.equal(
-    await page.locator(".mission-card h2").textContent(),
-    "保持好奇，\n慢慢做出喜歡的事。",
-  );
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.mouse.move(
-    optical.x + optical.width * 0.25,
-    optical.y + optical.height * 0.25,
+    await page.locator(".folio-work-link h2").textContent(),
+    "好奇，\n是一種工作方式。",
   );
   assert.equal(
-    await page.locator(".mission-card").evaluate((el) => el.style.transform),
-    "",
+    await page.locator('main a[data-page-target="work"]').count(),
+    1,
+    "One primary work entrance avoids repeated homepage functions",
   );
   await page.mouse.move(0, 0);
   await page.evaluate(() => scrollTo({ top: 0, behavior: "instant" }));
@@ -192,13 +177,13 @@ try {
         last = el.lastElementChild.getBoundingClientRect();
       return {
         left: Math.abs(first.left - r.left),
-        right: Math.abs(last.right - r.right),
+        right: r.right - last.right,
         width: r.width,
       };
     });
     assert.ok(
-      footer.left < 2 && footer.right < 2,
-      `Footer edge alignment at ${width}px`,
+      footer.left < 2 && footer.right >= -2,
+      `Footer remains inside its editorial column at ${width}px`,
     );
     if (width === 390)
       await page.screenshot({
@@ -221,17 +206,15 @@ try {
     { width: 390, height: 844 },
   ]) {
     await page.setViewportSize(viewport);
-    const copyBox = await page.locator(".hero-copy").boundingBox();
-    if (await page.locator(".featured-card").count()) {
-      const featuredBox = await page.locator(".featured-card").boundingBox();
-      assert.ok(featuredBox.y >= copyBox.y + copyBox.height + 20,
-        `Hero overlap at ${viewport.width}x${viewport.height}`);
-    } else {
-      assert.equal(await page.getByRole("heading", { name: "物件研究室", exact: true }).count(), 0);
-      assert.equal(await page.locator('.mission-card').getAttribute('data-page-target'), 'work');
-    }
+    const heroBox = await page.locator(".folio-hero").boundingBox();
+    const entryBox = await page.locator(".folio-work-entry").boundingBox();
+    assert.ok(entryBox.y >= heroBox.y + heroBox.height,
+      `The work entrance follows the hero without overlap at ${viewport.width}x${viewport.height}`);
+    assert.equal(await page.getByRole("heading", { name: "物件研究室", exact: true }).count(), 0);
+    assert.equal(await page.locator('.folio-work-link').getAttribute('data-page-target'), 'work');
   }
   await page.setViewportSize({ width: 1440, height: 1080 });
+  await editorialRegression({ browser, origin });
   await page.goto(`${origin}/work/`, { waitUntil: "networkidle" });
   await page.locator("[data-work-lab][data-engine]").waitFor();
   assert.equal(await page.locator(".work-card").count(),0,"Old portfolio fields start empty");
@@ -254,7 +237,7 @@ try {
   await settleCanvas();
   await page.getByRole("button", { name: "開啟選單", exact: true }).click();
   await settleCanvas();
-  await page.getByRole("dialog", { name: "EXPLORE THE SPACE" }).waitFor();
+  await page.getByRole("dialog", { name: "網站導覽", exact: true }).waitFor();
   await page.keyboard.press("Escape");
   assert.equal(
     await page

@@ -1,4 +1,5 @@
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import { filterLayerTree, layerAncestors, type LayerFilter } from "./layer-tree";
 import type {
   Selection,
   SiteContent,
@@ -31,12 +32,32 @@ export function LayerExplorer({
   const [items, setItems] = useState<LayerItem[]>([]),
     [closed, setClosed] = useState<Set<string>>(new Set()),
     [search, setSearch] = useState(""),
+    [filter, setFilter] = useState<LayerFilter>("all"),
     [message, setMessage] = useState("");
+  const tree = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (root.current) setItems(collectLayers(content, root.current));
   }, [content, page, root]);
   const selectedKey = selectionKey(selection, page);
   const selected = items.find((i) => i.key === selectedKey);
+  const filtered = filterLayerTree(items, search, filter);
+  const path = layerAncestors(items, selectedKey);
+  const lockedKeys = new Set(items.filter((item) => item.locked).map((item) => item.key));
+  const inheritedLock = (key: string) => layerAncestors(items, key).some((parent) => lockedKeys.has(parent));
+  const selectedLocked = Boolean(selected?.locked || inheritedLock(selectedKey));
+  useEffect(() => {
+    const ancestors = layerAncestors(items, selectedKey);
+    setClosed((old) => {
+      if (!ancestors.some((key) => old.has(key))) return old;
+      const next = new Set(old);
+      ancestors.forEach((key) => next.delete(key));
+      return next;
+    });
+    const frame = requestAnimationFrame(() => {
+      tree.current?.querySelector<HTMLElement>(".ps-layer-row.selected")?.scrollIntoView({ block: "nearest" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selectedKey, items]);
   const children = new Map<string | null, LayerItem[]>();
   const keys = new Set(items.map((i) => i.key));
   for (const item of items) {
@@ -59,18 +80,30 @@ export function LayerExplorer({
       else next.add(key);
       return next;
     });
+  const siblings = selected ? children.get(keys.has(selected.parent || "") ? selected.parent : null) || [] : [];
+  const selectedIndex = siblings.findIndex((item) => item.key === selectedKey);
+  const moveSelected = (direction: -1 | 1) => {
+    const destination = siblings[selectedIndex + direction];
+    if (!selected || !destination || selectedLocked || selected.deleted) return;
+    const candidate = structuredClone(content);
+    reorderLayer(candidate, selected, destination, false, direction > 0);
+    if (!contentSchema.safeParse(candidate).success) {
+      setMessage("此圖層無法移到該位置。");
+      return;
+    }
+    update((next) => reorderLayer(next, selected, destination, false, direction > 0));
+    setMessage(`已${direction < 0 ? "上移" : "下移"}「${selected.name}」。`);
+  };
   const rows = (parent: string | null, depth = 0): React.ReactNode =>
     (children.get(parent) || []).map((item) => {
-      const hasChildren = children.has(item.key),
-        visible =
-          !search || item.name.toLowerCase().includes(search.toLowerCase());
+      if (!filtered.visible.has(item.key)) return null;
+      const hasChildren = children.has(item.key);
       return (
         <div key={item.key}>
-          {visible && (
             <div
-              className={`ps-layer-row ${selectedKey === item.key ? "selected" : ""} ${item.deleted ? "deleted" : ""}`}
+              className={`ps-layer-row ${selectedKey === item.key ? "selected" : ""} ${item.deleted ? "deleted" : ""} ${filtered.active && !filtered.matches.has(item.key) ? "layer-context" : ""}`}
               style={{ "--depth": depth } as React.CSSProperties}
-              draggable={!item.locked}
+              draggable={!item.locked && !inheritedLock(item.key) && !item.deleted && !filtered.active}
               onDragStart={(e) => {
                 e.dataTransfer.setData("application/outdesign-layer", item.key);
                 e.dataTransfer.effectAllowed = "move";
@@ -100,7 +133,7 @@ export function LayerExplorer({
                     i.key ===
                     e.dataTransfer.getData("application/outdesign-layer"),
                 );
-                if (!from) return;
+                if (!from || inheritedLock(from.key)) return;
                 const after =
                   e.clientY >
                   e.currentTarget.getBoundingClientRect().top +
@@ -118,12 +151,12 @@ export function LayerExplorer({
             >
               <button
                 className="layer-fold"
-                aria-label={`展開圖層：${item.name}`}
-                aria-expanded={hasChildren ? !closed.has(item.key) : undefined}
+                aria-label={`${closed.has(item.key) && !filtered.active ? "展開" : "收合"}圖層：${item.name}`}
+                aria-expanded={hasChildren ? filtered.active || !closed.has(item.key) : undefined}
                 onClick={() => toggle(item.key)}
-                disabled={!hasChildren}
+                disabled={!hasChildren || filtered.active}
               >
-                {hasChildren ? (closed.has(item.key) ? "▸" : "▾") : "·"}
+                {hasChildren ? (closed.has(item.key) && !filtered.active ? "▸" : "▾") : "·"}
               </button>
               <button
                 className="layer-select"
@@ -131,10 +164,10 @@ export function LayerExplorer({
                 aria-pressed={selectedKey === item.key}
                 onClick={() => select(item.selection)}
               >
-                <span className="layer-thumbnail">
+                  <span className="layer-thumbnail" aria-hidden="true">
                   {hasChildren ? "▣" : "▤"}
                 </span>
-                <span>{item.name}</span>
+                <span title={item.name}>{item.name}</span>
               </button>
               <button
                 className="layer-mini"
@@ -169,13 +202,13 @@ export function LayerExplorer({
                 {item.locked ? "▣" : "·"}
               </button>
             </div>
-          )}
-          {(!closed.has(item.key) || search) && rows(item.key, depth + 1)}
+          {(!closed.has(item.key) || filtered.active) && rows(item.key, depth + 1)}
         </div>
       );
     });
   return (
     <div className="layer-explorer">
+      <div className="author-section-label"><span>LAYERS</span><span>{items.length}</span></div>
       <input
         className="layer-search"
         aria-label="搜尋圖層"
@@ -183,9 +216,24 @@ export function LayerExplorer({
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
-      <div className="layer-tree-scroll">{rows(null)}</div>
+      <label className="layer-filter">顯示範圍
+        <select aria-label="圖層狀態篩選" value={filter} onChange={(e) => setFilter(e.target.value as LayerFilter)}>
+          <option value="all">所有圖層</option><option value="hidden">隱藏的圖層</option><option value="locked">已鎖定的圖層</option><option value="deleted">已刪除的圖層</option>
+        </select>
+      </label>
+      <div className="layer-result-count" aria-live="polite">{filtered.active ? `${filtered.matches.size} 個符合結果` : "依頁面結構排列"}{filtered.active && <button onClick={() => { setSearch(""); setFilter("all"); }}>清除篩選</button>}</div>
+      <div className="layer-tree-scroll" ref={tree} role="group" aria-label="頁面圖層結構">
+        {filtered.matches.size ? rows(null) : <p className="author-empty">找不到符合的圖層。<br />嘗試名稱、識別碼或其他狀態。</p>}
+      </div>
+      {selected && <div className="layer-selection-context">
+        <span className="author-section-label">目前選取</span>
+        <p title={[...path.map((key) => items.find((item) => item.key === key)?.name), selected.name].join(" / ")}>{selected.name}</p>
+        <small>{path.length ? `${path.length} 層父項目 · ` : "頁面最外層 · "}{selected.deleted ? "已刪除" : selected.locked ? "已鎖定" : selectedLocked ? "父層已鎖定" : selected.hidden ? "已隱藏" : "可編輯"}</small>
+        {!filtered.visible.has(selectedKey) && <button onClick={() => { setSearch(""); setFilter("all"); }}>顯示選取圖層</button>}
+        <div className="layer-reorder-actions"><button disabled={selectedLocked || selected.deleted || selectedIndex <= 0} onClick={() => moveSelected(-1)} aria-label="選取圖層上移">↑ 上移</button><button disabled={selectedLocked || selected.deleted || selectedIndex < 0 || selectedIndex >= siblings.length - 1} onClick={() => moveSelected(1)} aria-label="選取圖層下移">↓ 下移</button></div>
+      </div>}
       <div className="layer-bottom-actions">
-        <span>{items.length} 個圖層</span>
+        <span>{selectedLocked ? "已鎖定" : "選取項目操作"}</span>
         {selected?.deleted ? (
           <button
             onClick={() =>
@@ -198,7 +246,7 @@ export function LayerExplorer({
           </button>
         ) : (
           <button
-            disabled={!selected || selected.locked}
+            disabled={!selected || selectedLocked}
             onClick={remove}
             aria-label="刪除選取圖層"
           >
@@ -206,7 +254,7 @@ export function LayerExplorer({
           </button>
         )}
       </div>
-      <p className="layer-hint">拖曳調整順序 · Shift 拖入自訂群組</p>
+      <p className="layer-hint">{filtered.active ? "搜尋保留父層路徑；清除篩選後可拖曳。" : "拖曳調整順序 · Shift 拖入自訂群組"}</p>
       {message && <p role="status">{message}</p>}
     </div>
   );
