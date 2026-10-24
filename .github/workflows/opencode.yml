@@ -1,0 +1,26 @@
+name: OpenCode GitHub Agent
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  opencode:
+    # 只有當你在留言區輸入 /opencode 或 /oc 時，AI 才會啟動
+    if: contains(github.event.comment.body, '/opencode') || contains(github.event.comment.body, '/oc')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Run OpenCode Agent
+        uses: opencode-ai/agent-action@v2
+        with:
+          # 💡 以後想換模型，直接改下面這一行引號內的名稱即可
+          model: 'anthropic/claude-sonnet-5-5' 
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 💡 如果你換了 Claude 模型，記得去專案 Settings 補上這個 API Key 金鑰
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }} 
